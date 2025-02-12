@@ -1,0 +1,7 @@
+spring:
+  application:
+    name: getaway-server
+  config:
+    import: optional:configserver:http://localhost:8071
+jwt:
+  public-key: ${JWT_PUBLIC_KEY}

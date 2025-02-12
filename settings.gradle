@@ -1,0 +1,10 @@
+rootProject.name = 'spring-microservices'
+
+includeBuild('eureka-server')
+includeBuild('config-server')
+includeBuild('getaway-server')
+includeBuild('order-service')
+includeBuild('shop-service')
+
+
+
