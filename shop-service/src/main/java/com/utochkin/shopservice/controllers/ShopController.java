@@ -48,15 +48,15 @@ public class ShopController {
         return new ResponseEntity<>(productService.addProduct(productDto), HttpStatus.CREATED);
     }
 
-    @DeleteMapping("/deleteProduct/{id}")
-    ResponseEntity<?> deleteProduct(@PathVariable Long id){
-        productService.deleteProduct(id);
-        return new ResponseEntity<>(String.format("Product with id = %s deleted", id), HttpStatus.OK);
+    @DeleteMapping("/deleteProduct/{articleId}")
+    ResponseEntity<?> deleteProduct(@PathVariable UUID articleId){
+        productService.deleteProduct(articleId);
+        return new ResponseEntity<>(String.format("Product with articleId = %s deleted", articleId), HttpStatus.OK);
     }
 
-    @PutMapping("/updateProduct")
-    ResponseEntity<?> updateProduct(@RequestBody ProductDto productDto){
-        return ResponseEntity.ok(productService.updateProduct(productDto));
+    @PutMapping("/updateProduct/{articleId}")
+    ResponseEntity<?> updateProduct(@PathVariable UUID articleId, @RequestBody ProductDto productDto){
+        return ResponseEntity.ok(productService.updateProduct(articleId, productDto));
     }
 
 

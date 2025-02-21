@@ -1,9 +1,16 @@
 package com.utochkin.shopservice.dto;
 
-import java.util.UUID;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
-public record ProductDto(UUID articleId,
-                         String name,
-                         Integer quantity,
-                         Double price) {
+import java.util.UUID;
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class ProductDto {
+    private UUID articleId;
+    private String name;
+    private Integer quantity;
+    private Double price;
 }

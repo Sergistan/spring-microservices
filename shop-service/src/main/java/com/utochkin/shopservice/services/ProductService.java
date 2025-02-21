@@ -7,13 +7,13 @@ import com.utochkin.shopservice.mappers.ProductMapper;
 import com.utochkin.shopservice.models.Product;
 import com.utochkin.shopservice.repositories.ProductRepository;
 import com.utochkin.shopservice.request.OrderRequest;
-
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -102,22 +102,37 @@ public class ProductService {
 
     @Transactional
     public ProductDto addProduct(ProductDto productDtoRequest) {
-        ProductDto productDto = new ProductDto(UUID.randomUUID(), productDtoRequest.name(), productDtoRequest.quantity(), productDtoRequest.price());
+        ProductDto productDto = new ProductDto(UUID.randomUUID(), productDtoRequest.getName(), productDtoRequest.getQuantity(), productDtoRequest.getPrice());
         Product product = productMapper.toEntity(productDto);
         productRepository.save(product);
         return productMapper.toDto(product);
     }
 
     @Transactional
-    public void deleteProduct(Long id) {
-        productRepository.deleteById(id);
+    public void deleteProduct(UUID articleId) {
+        Optional <Product> productByArticleId = productRepository.findByArticleId(articleId);
+        if(productByArticleId.isPresent()){
+            productRepository.deleteByArticleId(articleId);
+        } else {
+            throw new ProductNotFoundException("Not found this product!");
+        }
+
     }
 
     @Transactional
-    public ProductDto updateProduct(ProductDto productDto) {
-        Product product = productMapper.toEntity(productDto);
-        productRepository.save(product);
-        return productMapper.toDto(product);
+    public ProductDto updateProduct(UUID articleId, ProductDto productDto) {
+        Optional <Product> productByArticleId = productRepository.findByArticleId(articleId);
+        if(productByArticleId.isPresent()){
+            Product product = productByArticleId.get();
+            product.setName(productDto.getName());
+            product.setQuantity(productDto.getQuantity());
+            product.setPrice(productDto.getPrice());
+
+            productRepository.save(product);
+            return productMapper.toDto(product);
+        } else {
+            throw new ProductNotFoundException("Not found this product!");
+        }
     }
 }
 
