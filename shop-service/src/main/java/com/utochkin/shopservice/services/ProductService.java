@@ -25,7 +25,6 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final ProductMapper productMapper;
 
-
     @Transactional(readOnly = true)
     public Boolean checkOrder(List<OrderRequest> orderRequests) {
         List<UUID> listUuids = orderRequests.stream().map(OrderRequest::getArticleId).toList();
@@ -43,7 +42,7 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
-    public Double getSumTotalPriceOrder(List<OrderRequest> orderRequests) {
+    public Double getSumTotalPriceOrder(List<OrderRequest> orderRequests){
         List<UUID> listUuids = orderRequests.stream().map(OrderRequest::getArticleId).toList();
 
         List<Product> products = productRepository.findAllByArticleIds(listUuids);

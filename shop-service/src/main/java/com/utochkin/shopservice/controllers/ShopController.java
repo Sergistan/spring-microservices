@@ -19,43 +19,43 @@ public class ShopController {
     private final ProductService productService;
 
     @PostMapping("/checkOrder")
-    Boolean checkOrder(@RequestBody List<OrderRequest> orderRequests){
-       return productService.checkOrder(orderRequests);
+    Boolean checkOrder(@RequestBody List<OrderRequest> orderRequests) {
+        return productService.checkOrder(orderRequests);
     }
 
     @PostMapping("/getSumTotalPriceOrder")
-    Double getSumTotalPriceOrder(@RequestBody List<OrderRequest> orderRequests){
-            return productService.getSumTotalPriceOrder(orderRequests);
+    Double getSumTotalPriceOrder(@RequestBody List<OrderRequest> orderRequests) {
+        return productService.getSumTotalPriceOrder(orderRequests);
     }
 
     @PostMapping("/changeTotalQuantityProductsAfterCreateOrder")
-    void changeTotalQuantityProductsAfterCreateOrder(@RequestBody List<OrderRequest> orderRequests){
+    void changeTotalQuantityProductsAfterCreateOrder(@RequestBody List<OrderRequest> orderRequests) {
         productService.changeTotalQuantityProductsAfterCreateOrder(orderRequests);
     }
 
     @GetMapping("/getAllProducts")
-    ResponseEntity<?> getAllProducts(){
+    ResponseEntity<?> getAllProducts() {
         return ResponseEntity.ok(productService.getAllProducts());
     }
 
     @GetMapping("/getProducts/{articleId}")
-    ResponseEntity<?> getProducts(@PathVariable UUID articleId){
+    ResponseEntity<?> getProducts(@PathVariable UUID articleId) {
         return ResponseEntity.ok(productService.getProduct(articleId));
     }
 
     @PostMapping("/addProduct")
-    ResponseEntity<?> addProduct(@RequestBody ProductDto productDto){
+    ResponseEntity<?> addProduct(@RequestBody ProductDto productDto) {
         return new ResponseEntity<>(productService.addProduct(productDto), HttpStatus.CREATED);
     }
 
     @DeleteMapping("/deleteProduct/{articleId}")
-    ResponseEntity<?> deleteProduct(@PathVariable UUID articleId){
+    ResponseEntity<?> deleteProduct(@PathVariable UUID articleId) {
         productService.deleteProduct(articleId);
         return new ResponseEntity<>(String.format("Product with articleId = %s deleted", articleId), HttpStatus.OK);
     }
 
     @PutMapping("/updateProduct/{articleId}")
-    ResponseEntity<?> updateProduct(@PathVariable UUID articleId, @RequestBody ProductDto productDto){
+    ResponseEntity<?> updateProduct(@PathVariable UUID articleId, @RequestBody ProductDto productDto) {
         return ResponseEntity.ok(productService.updateProduct(articleId, productDto));
     }
 

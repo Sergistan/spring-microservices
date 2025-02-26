@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class ExceptionControllerAdvice {
-    @ResponseStatus(HttpStatus.NOT_FOUND)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
     @ExceptionHandler(ProductNotFoundException.class)
     public ErrorResponse handlerAccessDeniedException(ProductNotFoundException productNotFoundException) {
         return new ErrorResponse(productNotFoundException.getMessage());
