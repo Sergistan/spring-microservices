@@ -1,4 +1,4 @@
-package com.utochkin.shopservice.request;
+package com.utochkin.shopservice.requests;
 
 import lombok.Data;
 

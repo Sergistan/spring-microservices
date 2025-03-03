@@ -1,7 +1,7 @@
 package com.utochkin.shopservice.controllers;
 
 import com.utochkin.shopservice.dto.ProductDto;
-import com.utochkin.shopservice.request.OrderRequest;
+import com.utochkin.shopservice.requests.OrderRequest;
 import com.utochkin.shopservice.services.ProductService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -31,6 +31,11 @@ public class ShopController {
     @PostMapping("/changeTotalQuantityProductsAfterCreateOrder")
     void changeTotalQuantityProductsAfterCreateOrder(@RequestBody List<OrderRequest> orderRequests) {
         productService.changeTotalQuantityProductsAfterCreateOrder(orderRequests);
+    }
+
+    @PostMapping("/changeTotalQuantityProductsAfterRefundedOrder")
+    void changeTotalQuantityProductsAfterRefundedOrder(@RequestBody List<OrderRequest> orderRequests){
+        productService.changeTotalQuantityProductsAfterRefundedOrder(orderRequests);
     }
 
     @GetMapping("/getAllProducts")

@@ -6,5 +6,3 @@ create table if not exists products
     quantity INTEGER NOT NULL,
     price DOUBLE PRECISION NOT NULL
 );
-
-drop table products;

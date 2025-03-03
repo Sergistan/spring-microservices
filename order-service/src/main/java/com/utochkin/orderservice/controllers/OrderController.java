@@ -3,6 +3,7 @@ package com.utochkin.orderservice.controllers;
 import com.utochkin.orderservice.dto.OrderDto;
 import com.utochkin.orderservice.models.User;
 import com.utochkin.orderservice.request.CompositeRequest;
+import com.utochkin.orderservice.request.PaymentRequest;
 import com.utochkin.orderservice.services.OrderService;
 import com.utochkin.orderservice.services.UserService;
 import lombok.RequiredArgsConstructor;
@@ -49,6 +50,17 @@ public class OrderController {
             OrderDto orderDto = orderService.createOrder(user, compositeRequest.getOrderRequests(), compositeRequest.getAddress());
             return new ResponseEntity<>(orderDto, HttpStatus.CREATED);
         }
+    }
+
+    @PostMapping("/pay")
+    public ResponseEntity<?> paymentOrder(@RequestBody PaymentRequest paymentRequest) {
+        return new ResponseEntity<>(orderService.paymentOrder(paymentRequest), HttpStatus.OK);
+    }
+
+    @PostMapping("/refunded")
+    public ResponseEntity<?> refundedOrder(@RequestBody PaymentRequest paymentRequest) {
+        orderService.refundedOrder(paymentRequest);
+        return new ResponseEntity<>("Заказ успешно отменен", HttpStatus.OK);
     }
 
 }

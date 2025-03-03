@@ -1,9 +1,13 @@
 package com.utochkin.orderservice.services;
 
 
+import com.utochkin.orderservice.controllers.PaymentController;
 import com.utochkin.orderservice.controllers.ShopController;
 import com.utochkin.orderservice.dto.OrderDto;
 import com.utochkin.orderservice.dto.UserDto;
+import com.utochkin.orderservice.exceptions.FailedOrderStatusException;
+import com.utochkin.orderservice.exceptions.FailedPayOrderException;
+import com.utochkin.orderservice.exceptions.OrderNotFoundException;
 import com.utochkin.orderservice.exceptions.ServiceUnavailableException;
 import com.utochkin.orderservice.mappers.OrderMapper;
 import com.utochkin.orderservice.mappers.ProductInfoMapper;
@@ -12,7 +16,10 @@ import com.utochkin.orderservice.models.*;
 import com.utochkin.orderservice.repositories.AddressRepository;
 import com.utochkin.orderservice.repositories.OrderRepository;
 import com.utochkin.orderservice.repositories.ProductInfoRepository;
+import com.utochkin.orderservice.request.AccountRequest;
 import com.utochkin.orderservice.request.OrderRequest;
+import com.utochkin.orderservice.request.PaymentRequest;
+import com.utochkin.orderservice.request.PaymentResponse;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +28,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 
 @Service
@@ -29,7 +39,8 @@ import java.util.List;
 @Log4j2
 public class OrderService {
 
-    private final ShopController shopServiceClient;
+    private final ShopController shopController;
+    private final PaymentController paymentController;
     private final ProductInfoMapper productInfoMapper;
     private final OrderRepository orderRepository;
     private final AddressRepository addressRepository;
@@ -41,12 +52,12 @@ public class OrderService {
     @CircuitBreaker(name = "circuitBreakerCheckOrder", fallbackMethod = "fallbackMethodCheckOrder")
     @Retry(name = "retryCheckOrder", fallbackMethod = "fallbackMethodCheckOrder")
     public Boolean checkOrder(List<OrderRequest> orderRequests) {
-        return shopServiceClient.checkOrder(orderRequests);
+        return shopController.checkOrder(orderRequests);
     }
 
     public Boolean fallbackMethodCheckOrder(List<OrderRequest> orderRequests, Throwable throwable) {
-        log.error("Fallback triggered for checkOrder due to: {}", throwable.getMessage());
-        throw new ServiceUnavailableException("The service is temporarily unavailable, please try again later");
+        log.error("Fallback для checkOrder сработал из-за: {}", throwable.getMessage());
+        throw new ServiceUnavailableException("Сервис временно недоступен, пожалуйста, повторите попытку позже");
     }
 
     @Transactional
@@ -59,28 +70,123 @@ public class OrderService {
         productInfoRepository.saveAll(listEntity);
 
         Order order = new Order();
-        order.setTotalAmount(shopServiceClient.getSumTotalPriceOrder(orderRequests));
+        order.setOrderUuid(UUID.randomUUID());
+        order.setTotalAmount(shopController.getSumTotalPriceOrder(orderRequests));
         order.setOrderStatus(Status.WAITING_FOR_PAYMENT);
         order.setCreatedAt(LocalDateTime.now());
         order.setUpdatedAt(null);
         order.setAddress(savedAddress);
         order.setUser(user);
+        order.setPaymentId(null);
         order.setProductInfos(listEntity);
         Order savedOrder = orderRepository.save(order);
 
         listEntity.forEach(productInfo -> productInfo.setOrder(savedOrder));
 
-        shopServiceClient.changeTotalQuantityProductsAfterCreateOrder(orderRequests);
+        shopController.changeTotalQuantityProductsAfterCreateOrder(orderRequests);
 
         UserDto userDto = userMapper.toDto(user);
-
         return orderMapper.toDto(savedOrder, userDto, orderRequests);
     }
 
     public OrderDto fallbackMethodCreateOrder(User user, List<OrderRequest> orderRequests, Address address, Throwable throwable) {
-        log.error("Fallback triggered for createOrder due to: {}", throwable.getMessage());
-        throw new ServiceUnavailableException("The service is temporarily unavailable, please try again later");
+        log.error("Fallback для createOrder сработал из-за: {}", throwable.getMessage());
+        throw new ServiceUnavailableException("Сервис временно недоступен, пожалуйста, повторите попытку позже");
     }
+
+    @Transactional(noRollbackFor = FailedPayOrderException.class)
+    @CircuitBreaker(name = "circuitBreakerPayOrder", fallbackMethod = "fallbackMethodPayOrder")
+    @Retry(name = "retryPayOrder", fallbackMethod = "fallbackMethodPayOrder")
+    public PaymentResponse paymentOrder(PaymentRequest paymentRequest) {
+        Optional<Order> orderById = orderRepository.findByOrderUuid(paymentRequest.getOrderUuid());
+        if (orderById.isPresent()) {
+            Order order = orderById.get();
+            switch (order.getOrderStatus()) {
+                case SUCCESS -> throw new FailedOrderStatusException("Заказ уже оплачен!");
+                case REFUNDED -> throw new FailedOrderStatusException("Заказ отменен, необходимо создать новый заказ!");
+            }
+
+            Double totalAmountById = orderRepository.findTotalAmountByOrderUuid(paymentRequest.getOrderUuid());
+            PaymentResponse paymentResponse = paymentController.paymentOrder(new AccountRequest(totalAmountById, paymentRequest.getCardNumber()));
+            switch (paymentResponse.getStatus()) {
+                case Status.SUCCESS -> {
+                    order.setOrderStatus(Status.SUCCESS);
+                    order.setUpdatedAt(LocalDateTime.now());
+                    order.setPaymentId(paymentResponse.getPaymentId());
+                    orderRepository.save(order);
+                    // todo СДЕЛАТЬ ОТПРВКУ В КАФКУ
+                }
+                case Status.FAILED -> {
+                    order.setOrderStatus(Status.FAILED);
+                    order.setUpdatedAt(LocalDateTime.now());
+                    order.setPaymentId(paymentResponse.getPaymentId());
+                    orderRepository.save(order);
+                    throw new FailedPayOrderException();
+                    // todo СДЕЛАТЬ ОТПРВКУ В КАФКУ
+                }
+            }
+            return paymentResponse;
+        } else {
+            throw new OrderNotFoundException();
+        }
+    }
+
+//    public PaymentResponse fallbackMethodPayOrder(PaymentRequest paymentRequest, Throwable throwable) {
+//        log.error("Fallback для paymentOrder сработал из-за: {}", throwable.getMessage());
+//        throw new ServiceUnavailableException("Сервис временно недоступен, пожалуйста, повторите попытку позже");
+//    }
+
+
+    @Transactional
+    @CircuitBreaker(name = "circuitBreakerRefundedOrder", fallbackMethod = "fallbackMethodRefundedOrder")
+    @Retry(name = "retryRefundedOrder", fallbackMethod = "fallbackMethodRefundedOrder")
+    public void refundedOrder(PaymentRequest paymentRequest) {
+        Optional<Order> orderById = orderRepository.findByOrderUuid(paymentRequest.getOrderUuid());
+        if (orderById.isPresent()) {
+            Order order = orderById.get();
+            switch (order.getOrderStatus()) {
+                case WAITING_FOR_PAYMENT, FAILED, REFUNDED ->
+                        throw new FailedOrderStatusException("Заказ нельзя отменить, т.к. он не был оплачен!");
+            }
+
+            Double totalAmountById = orderRepository.findTotalAmountByOrderUuid(paymentRequest.getOrderUuid());
+            PaymentResponse refundedOrder = paymentController.refundedOrder(new AccountRequest(totalAmountById, paymentRequest.getCardNumber()));
+            if (refundedOrder.getStatus().equals(Status.REFUNDED)) {
+                order.setOrderStatus(Status.REFUNDED);
+                order.setUpdatedAt(LocalDateTime.now());
+                order.setPaymentId(refundedOrder.getPaymentId());
+
+                List<ProductInfo> productInfos = order.getProductInfos();
+
+                List<OrderRequest> orderRequests = productInfos.stream()
+                        .map(productInfo -> {
+                            OrderRequest orderRequest = new OrderRequest();
+                            orderRequest.setArticleId(productInfo.getArticleId());
+                            orderRequest.setQuantity(productInfo.getQuantity());
+                            return orderRequest;
+                        })
+                        .toList();
+
+                shopController.changeTotalQuantityProductsAfterRefundedOrder(orderRequests);
+
+                order.setProductInfos(Collections.emptyList());
+
+                orderRepository.save(order);
+
+                List<Long> productIds = productInfos.stream().map(ProductInfo::getId).toList();
+
+                productInfoRepository.deleteAllById(productIds);
+                // todo СДЕЛАТЬ ОТПРВКУ В КАФКУ
+            }
+        } else {
+            throw new OrderNotFoundException();
+        }
+    }
+
+//    public void fallbackMethodRefundedOrder(PaymentRequest paymentRequest, Throwable throwable) {
+//        log.error("Fallback для refundedOrder сработал из-за: {}", throwable.getMessage());
+//        throw new ServiceUnavailableException("Сервис временно недоступен, пожалуйста, повторите попытку позже");
+//    }
 
 }
 

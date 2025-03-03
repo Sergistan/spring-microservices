@@ -7,8 +7,10 @@ import com.utochkin.orderservice.request.OrderRequest;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
-public record OrderDto(Double totalAmount,
+public record OrderDto(UUID orderUuid,
+                       Double totalAmount,
                        Status orderStatus,
                        @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm") LocalDateTime createdAt,
                        Address address,

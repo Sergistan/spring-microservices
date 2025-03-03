@@ -1,4 +1,4 @@
-package com.utochkin.shopservice.request;
+package com.utochkin.paymentservice.requests;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

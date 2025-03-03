@@ -1,7 +1,7 @@
-package com.utochkin.shopservice.exceptions;
+package com.utochkin.paymentservice.exceptions;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.utochkin.shopservice.requests.ErrorResponse;
+import com.utochkin.paymentservice.requests.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;

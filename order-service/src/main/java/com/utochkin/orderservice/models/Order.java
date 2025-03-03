@@ -8,6 +8,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import java.time.LocalDateTime;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.UUID;
 
 @NoArgsConstructor
 @AllArgsConstructor
@@ -22,7 +23,10 @@ public class Order {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "totalAmount")
+    @Column(name = "order_uuid")
+    private UUID orderUuid;
+
+    @Column(name = "total_amount")
     private Double totalAmount;
 
     @Enumerated(value = EnumType.STRING)
@@ -48,6 +52,8 @@ public class Order {
     @OneToMany(mappedBy = "order")
     private List<ProductInfo> productInfos = new LinkedList<>();
 
+    @Column(name = "payment_id")
+    private UUID paymentId;
 }
 
 

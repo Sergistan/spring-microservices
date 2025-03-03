@@ -6,7 +6,7 @@ import com.utochkin.shopservice.exceptions.ProductNotFoundException;
 import com.utochkin.shopservice.mappers.ProductMapper;
 import com.utochkin.shopservice.models.Product;
 import com.utochkin.shopservice.repositories.ProductRepository;
-import com.utochkin.shopservice.request.OrderRequest;
+import com.utochkin.shopservice.requests.OrderRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -81,6 +81,27 @@ public class ProductService {
             }
 
             product.setQuantity(remainingQuantity);
+        }
+
+        productRepository.saveAll(products);
+    }
+
+    public void changeTotalQuantityProductsAfterRefundedOrder(List<OrderRequest> orderRequests) {
+        List<UUID> listUuids = orderRequests.stream().map(OrderRequest::getArticleId).toList();
+
+        List<Product> products = productRepository.findAllByArticleIds(listUuids);
+
+        Map<UUID, Product> productMap = products.stream().collect(Collectors.toMap(Product::getArticleId, product -> product));
+
+        for (OrderRequest orderRequest : orderRequests) {
+            Product product = productMap.get(orderRequest.getArticleId());
+
+            if (product == null) {
+                throw new ProductNotFoundException("Продукт с articleId " + orderRequest.getArticleId() + " не найден");
+            }
+
+            int updatedQuantity = product.getQuantity() + orderRequest.getQuantity();
+            product.setQuantity(updatedQuantity);
         }
 
         productRepository.saveAll(products);
