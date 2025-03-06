@@ -131,10 +131,17 @@ public class OrderService {
         }
     }
 
-//    public PaymentResponse fallbackMethodPayOrder(PaymentRequest paymentRequest, Throwable throwable) {
-//        log.error("Fallback для paymentOrder сработал из-за: {}", throwable.getMessage());
-//        throw new ServiceUnavailableException("Сервис временно недоступен, пожалуйста, повторите попытку позже");
-//    }
+    public PaymentResponse fallbackMethodPayOrder(PaymentRequest paymentRequest, Throwable throwable) {
+        if (throwable instanceof FailedOrderStatusException ||
+                throwable instanceof FailedPayOrderException ||
+                throwable instanceof OrderNotFoundException) {
+            throw throwable instanceof RuntimeException
+                    ? (RuntimeException) throwable
+                    : new RuntimeException(throwable);
+        }
+        log.error("Fallback для paymentOrder сработал из-за: {}", throwable.getMessage());
+        throw new ServiceUnavailableException("Сервис временно недоступен, пожалуйста, повторите попытку позже");
+    }
 
 
     @Transactional
@@ -183,10 +190,17 @@ public class OrderService {
         }
     }
 
-//    public void fallbackMethodRefundedOrder(PaymentRequest paymentRequest, Throwable throwable) {
-//        log.error("Fallback для refundedOrder сработал из-за: {}", throwable.getMessage());
-//        throw new ServiceUnavailableException("Сервис временно недоступен, пожалуйста, повторите попытку позже");
-//    }
+    public void fallbackMethodRefundedOrder(PaymentRequest paymentRequest, Throwable throwable) {
+        if (throwable instanceof FailedOrderStatusException ||
+                throwable instanceof FailedPayOrderException ||
+                throwable instanceof OrderNotFoundException) {
+            throw throwable instanceof RuntimeException
+                    ? (RuntimeException) throwable
+                    : new RuntimeException(throwable);
+        }
+        log.error("Fallback для refundedOrder сработал из-за: {}", throwable.getMessage());
+        throw new ServiceUnavailableException("Сервис временно недоступен, пожалуйста, повторите попытку позже");
+    }
 
 }
 
