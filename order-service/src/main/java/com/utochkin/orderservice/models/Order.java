@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.format.annotation.DateTimeFormat;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.LinkedList;
 import java.util.List;
@@ -17,7 +18,7 @@ import java.util.UUID;
 @Entity
 @Builder
 @Table(name = "orders")
-public class Order {
+public class Order implements Serializable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

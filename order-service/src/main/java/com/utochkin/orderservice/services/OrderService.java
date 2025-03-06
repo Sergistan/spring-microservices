@@ -4,6 +4,7 @@ package com.utochkin.orderservice.services;
 import com.utochkin.orderservice.controllers.PaymentController;
 import com.utochkin.orderservice.controllers.ShopController;
 import com.utochkin.orderservice.dto.OrderDto;
+import com.utochkin.orderservice.dto.OrderDtoForKafka;
 import com.utochkin.orderservice.dto.UserDto;
 import com.utochkin.orderservice.exceptions.FailedOrderStatusException;
 import com.utochkin.orderservice.exceptions.FailedPayOrderException;
@@ -47,6 +48,7 @@ public class OrderService {
     private final ProductInfoRepository productInfoRepository;
     private final UserMapper userMapper;
     private final OrderMapper orderMapper;
+    private final KafkaSenderService kafkaSenderService;
 
     @Transactional(readOnly = true)
     @CircuitBreaker(name = "circuitBreakerCheckOrder", fallbackMethod = "fallbackMethodCheckOrder")
@@ -86,6 +88,7 @@ public class OrderService {
         shopController.changeTotalQuantityProductsAfterCreateOrder(orderRequests);
 
         UserDto userDto = userMapper.toDto(user);
+
         return orderMapper.toDto(savedOrder, userDto, orderRequests);
     }
 
@@ -113,16 +116,39 @@ public class OrderService {
                     order.setOrderStatus(Status.SUCCESS);
                     order.setUpdatedAt(LocalDateTime.now());
                     order.setPaymentId(paymentResponse.getPaymentId());
-                    orderRepository.save(order);
-                    // todo СДЕЛАТЬ ОТПРВКУ В КАФКУ
+                    Order saveOrder = orderRepository.save(order);
+
+                    List<OrderRequest> orderRequests = order.getProductInfos()
+                            .stream()
+                            .map(productInfo -> new OrderRequest(
+                                    productInfo.getArticleId(),
+                                    productInfo.getQuantity()
+                            ))
+                            .toList();
+
+                    OrderDtoForKafka dtoForKafka = orderMapper.toDtoForKafka(saveOrder, userMapper.toDto(saveOrder.getUser()),orderRequests);
+
+                    kafkaSenderService.send(dtoForKafka);
                 }
                 case Status.FAILED -> {
                     order.setOrderStatus(Status.FAILED);
                     order.setUpdatedAt(LocalDateTime.now());
                     order.setPaymentId(paymentResponse.getPaymentId());
-                    orderRepository.save(order);
+                    Order saveOrder = orderRepository.save(order);
+
+                    List<OrderRequest> orderRequests = order.getProductInfos()
+                            .stream()
+                            .map(productInfo -> new OrderRequest(
+                                    productInfo.getArticleId(),
+                                    productInfo.getQuantity()
+                            ))
+                            .toList();
+
+                    OrderDtoForKafka dtoForKafka = orderMapper.toDtoForKafka(saveOrder, userMapper.toDto(saveOrder.getUser()),orderRequests);
+
+                    kafkaSenderService.send(dtoForKafka);
+
                     throw new FailedPayOrderException();
-                    // todo СДЕЛАТЬ ОТПРВКУ В КАФКУ
                 }
             }
             return paymentResponse;
@@ -183,7 +209,12 @@ public class OrderService {
                 List<Long> productIds = productInfos.stream().map(ProductInfo::getId).toList();
 
                 productInfoRepository.deleteAllById(productIds);
-                // todo СДЕЛАТЬ ОТПРВКУ В КАФКУ
+
+                Order saveOrder = orderRepository.save(order);
+
+                OrderDtoForKafka dtoForKafka = orderMapper.toDtoForKafka(saveOrder, userMapper.toDto(saveOrder.getUser()),orderRequests);
+
+                kafkaSenderService.send(dtoForKafka);
             }
         } else {
             throw new OrderNotFoundException();

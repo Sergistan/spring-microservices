@@ -3,6 +3,8 @@ package com.utochkin.orderservice.models;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.io.Serializable;
+
 @NoArgsConstructor
 @AllArgsConstructor
 @Setter
@@ -10,7 +12,7 @@ import lombok.*;
 @Entity
 @Builder
 @Table(name = "address")
-public class Address {
+public class Address implements Serializable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

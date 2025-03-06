@@ -1,6 +1,7 @@
 package com.utochkin.orderservice.mappers;
 
 import com.utochkin.orderservice.dto.OrderDto;
+import com.utochkin.orderservice.dto.OrderDtoForKafka;
 import com.utochkin.orderservice.dto.UserDto;
 import com.utochkin.orderservice.models.Order;
 import com.utochkin.orderservice.request.OrderRequest;
@@ -15,5 +16,7 @@ public interface OrderMapper {
     @Mapping(target = "orderRequests", expression = "java(orderRequests)")
     OrderDto toDto(Order order, UserDto userDto, List<OrderRequest> orderRequests);
 
-    Order toEntity(OrderDto orderDto);
+    @Mapping(target = "userDto", expression = "java(userDto)")
+    @Mapping(target = "orderRequests", expression = "java(orderRequests)")
+    OrderDtoForKafka toDtoForKafka(Order order, UserDto userDto, List<OrderRequest> orderRequests);
 }

@@ -3,6 +3,7 @@ package com.utochkin.orderservice.models;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.io.Serializable;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -13,7 +14,7 @@ import java.util.List;
 @Entity
 @Builder
 @Table(name = "users")
-public class User {
+public class User implements Serializable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
