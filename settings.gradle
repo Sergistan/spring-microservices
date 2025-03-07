@@ -6,6 +6,8 @@ includeBuild('getaway-server')
 includeBuild('order-service')
 includeBuild('shop-service')
 includeBuild('payment-service')
+includeBuild('notification-service')
+
 
 
 

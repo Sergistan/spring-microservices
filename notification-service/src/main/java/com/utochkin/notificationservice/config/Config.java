@@ -1,6 +1,6 @@
-package com.utochkin.paymentservice.config;
+package com.utochkin.notificationservice.config;
 
-import com.utochkin.paymentservice.exceptions.CustomAccessDeniedHandler;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,7 +16,6 @@ import org.springframework.security.web.SecurityFilterChain;
 @RequiredArgsConstructor
 public class Config {
 
-    private final CustomAccessDeniedHandler customAccessDeniedHandler;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -26,9 +25,6 @@ public class Config {
 
         http
                 .csrf(AbstractHttpConfigurer::disable)
-                .exceptionHandling(exception ->
-                        exception.accessDeniedHandler(customAccessDeniedHandler)
-                )
                 .authorizeHttpRequests(authorize -> authorize
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
