@@ -8,6 +8,12 @@ import com.utochkin.shopservice.models.Product;
 import com.utochkin.shopservice.repositories.ProductRepository;
 import com.utochkin.shopservice.requests.OrderRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -108,12 +114,14 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
-    public List<ProductDto> getAllProducts() {
-        List<Product> products = productRepository.findAll();
-        return productMapper.toListDto(products);
+    @Cacheable(value = "products", key = "#pageable.pageNumber")
+    public List<ProductDto> getAllProducts(Pageable pageable) {
+        Page<Product> productsPage = productRepository.findAll(pageable);
+        return productMapper.toListDto(productsPage.getContent());
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "product", key = "#articleId")
     public ProductDto getProduct(UUID articleId) {
         Product product = productRepository.findByArticleId(articleId).orElseThrow(() -> new ProductNotFoundException("Продукт с articleId " + articleId + " не найден"));
         return productMapper.toDto(product);
@@ -121,6 +129,10 @@ public class ProductService {
 
 
     @Transactional
+    @Caching(
+            put = { @CachePut(value = "product", key = "#result.articleId") },
+            evict = { @CacheEvict(value = "products", allEntries = true) }
+    )
     public ProductDto addProduct(ProductDto productDtoRequest) {
         ProductDto productDto = new ProductDto(UUID.randomUUID(), productDtoRequest.getName(), productDtoRequest.getQuantity(), productDtoRequest.getPrice());
         Product product = productMapper.toEntity(productDto);
@@ -129,6 +141,7 @@ public class ProductService {
     }
 
     @Transactional
+    @CacheEvict(value = {"products", "product"}, allEntries = true)
     public void deleteProduct(UUID articleId) {
         Optional <Product> productByArticleId = productRepository.findByArticleId(articleId);
         if(productByArticleId.isPresent()){
@@ -140,6 +153,10 @@ public class ProductService {
     }
 
     @Transactional
+    @Caching(
+            put = { @CachePut(value = "product", key = "#articleId") },
+            evict = { @CacheEvict(value = "products", allEntries = true) }
+    )
     public ProductDto updateProduct(UUID articleId, ProductDto productDto) {
         Optional <Product> productByArticleId = productRepository.findByArticleId(articleId);
         if(productByArticleId.isPresent()){

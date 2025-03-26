@@ -13,6 +13,8 @@ volumes:
     driver: local
   zookeeper-data:
     driver: local
+  cache:
+    driver: local
 
 
 services:
@@ -99,3 +101,15 @@ services:
       - "9000:9000"
     networks:
       - app-network
+
+  redis:
+    image: redis:7
+    container_name: redis
+    networks:
+      - app-network
+    environment:
+      TZ: Europe/Moscow
+    ports:
+      - "6379:6379"
+    volumes:
+      - cache:/data

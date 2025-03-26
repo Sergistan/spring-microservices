@@ -4,6 +4,9 @@ import com.utochkin.shopservice.dto.ProductDto;
 import com.utochkin.shopservice.requests.OrderRequest;
 import com.utochkin.shopservice.services.ProductService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -39,8 +42,8 @@ public class ShopController {
     }
 
     @GetMapping("/getAllProducts")
-    ResponseEntity<?> getAllProducts() {
-        return ResponseEntity.ok(productService.getAllProducts());
+    ResponseEntity<?> getAllProducts(@PageableDefault(page = 0, size = 5, sort = "name", direction = Sort.Direction.ASC) Pageable pageable) {
+        return ResponseEntity.ok(productService.getAllProducts(pageable));
     }
 
     @GetMapping("/getProducts/{articleId}")

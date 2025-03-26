@@ -3,6 +3,7 @@ package com.utochkin.shopservice.models;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.io.Serializable;
 import java.util.UUID;
 
 @NoArgsConstructor
@@ -12,7 +13,7 @@ import java.util.UUID;
 @Entity
 @Builder
 @Table(name = "products")
-public class Product {
+public class Product implements Serializable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
