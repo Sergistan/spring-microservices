@@ -1,4 +1,4 @@
-version: '3'
+version: '3.8'
 
 networks:
   app-network:
@@ -15,10 +15,12 @@ volumes:
     driver: local
   cache:
     driver: local
-
+  mongodb:
+    driver: local
 
 services:
   postgres:
+    container_name: postgres
     image: postgres:15
     restart: always
     environment:
@@ -33,6 +35,7 @@ services:
 
 
   keycloak:
+    container_name: keycloak
     image: quay.io/keycloak/keycloak:26.0.6
     command:
       - "start-dev"
@@ -113,3 +116,40 @@ services:
       - "6379:6379"
     volumes:
       - cache:/data
+
+#  mongo:
+#    image: mongo:6.0.21
+#    container_name: mongo
+#    ports:
+#      - "27017:27017"
+#    networks:
+#      - app-network
+#    environment:
+#      MONGO_INITDB_ROOT_USERNAME: admin
+#      MONGO_INITDB_ROOT_PASSWORD: pass
+#      TZ: Europe/Moscow
+#    volumes:
+#      - mongodb:/data/db
+#    healthcheck:
+#      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')", "--quiet" ]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 5
+#      start_period: 30s
+#
+#  mongo-express:
+#    image: mongo-express:1.0.2
+#    container_name: mongo-express
+#    ports:
+#      - "8081:8081"
+#    networks:
+#      - app-network
+#    environment:
+#      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+#      ME_CONFIG_MONGODB_ADMINPASSWORD: pass
+#      ME_CONFIG_MONGODB_SERVER: mongo
+#      ME_CONFIG_MONGODB_PORT: 27017
+#      TZ: Europe/Moscow
+#    depends_on:
+#      mongo:
+#        condition: service_healthy

@@ -20,10 +20,10 @@ public class User implements Serializable {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "subId")
+    @Column(name = "subId", unique = true)
     private String subId;
 
-    @Column(name = "username")
+    @Column(name = "username", unique = true)
     private String username;
 
     @Column(name = "firstName")
@@ -32,7 +32,7 @@ public class User implements Serializable {
     @Column(name = "lastName")
     private String lastName;
 
-    @Column(name = "email")
+    @Column(name = "email", unique = true)
     private String email;
 
     @Enumerated(value = EnumType.STRING)
