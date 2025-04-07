@@ -1,7 +1,10 @@
 package com.utochkin.historyservice.dto;
 
-public record UserDto(String username,
-                      String firstName,
-                      String lastName,
-                      String email) {
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotEmpty;
+
+public record UserDto(@NotEmpty String username,
+                      @NotEmpty String firstName,
+                      @NotEmpty String lastName,
+                      @Email String email) {
 }

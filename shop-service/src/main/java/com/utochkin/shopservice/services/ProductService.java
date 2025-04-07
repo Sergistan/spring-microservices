@@ -114,7 +114,7 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
-    @Cacheable(value = "products", key = "#pageable.pageNumber")
+    @Cacheable(value = "products", key = "#pageable.pageNumber + '-' + #pageable.pageSize + '-' + #pageable.sort.toString()")
     public List<ProductDto> getAllProducts(Pageable pageable) {
         Page<Product> productsPage = productRepository.findAll(pageable);
         return productMapper.toListDto(productsPage.getContent());

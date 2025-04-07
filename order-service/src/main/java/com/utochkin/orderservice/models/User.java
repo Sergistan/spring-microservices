@@ -1,6 +1,8 @@
 package com.utochkin.orderservice.models;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotEmpty;
 import lombok.*;
 
 import java.io.Serializable;
@@ -21,18 +23,23 @@ public class User implements Serializable {
     private Long id;
 
     @Column(name = "subId", unique = true)
+    @NotEmpty
     private String subId;
 
     @Column(name = "username", unique = true)
+    @NotEmpty
     private String username;
 
     @Column(name = "firstName")
+    @NotEmpty
     private String firstName;
 
     @Column(name = "lastName")
+    @NotEmpty
     private String lastName;
 
     @Column(name = "email", unique = true)
+    @Email
     private String email;
 
     @Enumerated(value = EnumType.STRING)

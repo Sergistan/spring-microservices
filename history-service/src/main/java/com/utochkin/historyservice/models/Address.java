@@ -1,8 +1,11 @@
 package com.utochkin.historyservice.models;
 
-public record Address(String city,
-                      String street,
-                      Integer houseNumber,
-                      Integer apartmentNumber) {
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Positive;
+
+public record Address(@NotEmpty String city,
+                      @NotEmpty String street,
+                      @Positive Integer houseNumber,
+                      @Positive Integer apartmentNumber) {
 
 }

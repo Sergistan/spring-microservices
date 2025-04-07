@@ -1,6 +1,7 @@
 package com.utochkin.historyservice.models;
 
 import com.utochkin.historyservice.dto.OrderDtoForKafka;
+import jakarta.validation.constraints.NotEmpty;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -16,6 +17,7 @@ import java.util.List;
 @Data
 public class OrderHistory implements Serializable {
     @Id
+    @NotEmpty
     private String username;
     private List<OrderDtoForKafka> orders;
 }

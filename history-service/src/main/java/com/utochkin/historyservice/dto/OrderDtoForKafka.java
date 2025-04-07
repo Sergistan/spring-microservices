@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import com.utochkin.historyservice.models.Address;
 import com.utochkin.historyservice.models.OrderRequest;
 import com.utochkin.historyservice.models.Status;
+import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -22,6 +23,7 @@ public class OrderDtoForKafka implements Serializable {
     @Field(targetType = FieldType.STRING)
     private UUID orderUuid;
 
+    @Positive
     private Double totalAmount;
 
     private Status orderStatus;

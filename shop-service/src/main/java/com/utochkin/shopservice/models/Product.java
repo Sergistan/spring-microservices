@@ -1,6 +1,8 @@
 package com.utochkin.shopservice.models;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Positive;
 import lombok.*;
 
 import java.io.Serializable;
@@ -19,15 +21,19 @@ public class Product implements Serializable {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "article_id", nullable = false, columnDefinition = "UUID")
+    @Column(name = "article_id", nullable = false, columnDefinition = "UUID", unique = true)
+    @NotEmpty
     private UUID articleId;
 
-    @Column(name = "name")
+    @Column(name = "name", unique = true)
+    @NotEmpty
     private String name;
 
     @Column(name = "quantity")
+    @Positive
     private Integer quantity;
 
     @Column(name = "price")
+    @Positive
     private Double price;
 }

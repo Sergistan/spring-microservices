@@ -5,6 +5,8 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import com.utochkin.notificationservice.models.Address;
 import com.utochkin.notificationservice.models.OrderRequest;
 import com.utochkin.notificationservice.models.Status;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -19,8 +21,10 @@ import java.util.UUID;
 @NoArgsConstructor
 public class OrderDtoForKafka implements Serializable {
 
+    @NotEmpty
     private UUID orderUuid;
 
+    @Positive
     private Double totalAmount;
 
     private Status orderStatus;
