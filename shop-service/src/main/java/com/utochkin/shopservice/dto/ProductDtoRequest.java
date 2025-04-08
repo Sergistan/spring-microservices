@@ -8,16 +8,11 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.io.Serializable;
-import java.util.UUID;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 @Schema(description = "Товар в магазине")
-public class ProductDto implements Serializable {
-    @Schema(description = "UUID товара", example = "3873f81b-6d10-4860-97f4-0719eb88afaa", type = "string", format = "uuid")
-    @NotEmpty
-    private UUID articleId;
+public class ProductDtoRequest {
 
     @Schema(description = "Название товара", example = "Телефон", type = "string")
     @NotEmpty

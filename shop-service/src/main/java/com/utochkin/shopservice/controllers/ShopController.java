@@ -1,6 +1,7 @@
 package com.utochkin.shopservice.controllers;
 
 import com.utochkin.shopservice.dto.ProductDto;
+import com.utochkin.shopservice.dto.ProductDtoRequest;
 import com.utochkin.shopservice.requests.ErrorResponse;
 import com.utochkin.shopservice.requests.OrderRequest;
 import com.utochkin.shopservice.services.ProductService;
@@ -99,10 +100,10 @@ public class ShopController {
             @ApiResponse(responseCode = "404", description = "Не найдено", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "500", description = "Ошибка сервера", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
     })
-    ResponseEntity<?> addProduct(@RequestBody @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(schema = @Schema(implementation = ProductDto.class),
+    ResponseEntity<?> addProduct(@RequestBody @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(schema = @Schema(implementation = ProductDtoRequest.class),
             encoding = @Encoding(contentType = "application/json")),
-            description = "Ввод товара для добавления в магазин", required = true) @Valid ProductDto productDto) {
-        return new ResponseEntity<>(productService.addProduct(productDto), HttpStatus.CREATED);
+            description = "Ввод товара для добавления в магазин", required = true) @Valid ProductDtoRequest productDtoRequest) {
+        return new ResponseEntity<>(productService.addProduct(productDtoRequest), HttpStatus.CREATED);
     }
 
     @DeleteMapping("/deleteProduct/{articleId}")
@@ -132,10 +133,10 @@ public class ShopController {
     ResponseEntity<?> updateProduct(@Parameter(
             description = "UUID артикула товара, который будет изменен",
             example = "3873f81b-6d10-4860-97f4-0719eb88afaa") @PathVariable UUID articleId,
-                                    @RequestBody @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(schema = @Schema(implementation = ProductDto.class),
+                                    @RequestBody @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(schema = @Schema(implementation = ProductDtoRequest.class),
                                             encoding = @Encoding(contentType = "application/json")),
-                                            description = "Ввод товара для изменения в магазине", required = true) @Valid ProductDto productDto) {
-        return ResponseEntity.ok(productService.updateProduct(articleId, productDto));
+                                            description = "Ввод товара для изменения в магазине", required = true) @Valid ProductDtoRequest productDtoRequest) {
+        return ResponseEntity.ok(productService.updateProduct(articleId, productDtoRequest));
     }
 
 }

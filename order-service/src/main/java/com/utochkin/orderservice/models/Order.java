@@ -3,6 +3,7 @@ package com.utochkin.orderservice.models;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.*;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -31,6 +32,7 @@ public class Order implements Serializable {
     private UUID orderUuid;
 
     @Column(name = "total_amount")
+    @NotNull
     @Positive
     private Double totalAmount;
 

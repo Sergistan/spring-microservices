@@ -2,6 +2,7 @@ package com.utochkin.shopservice.models;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.*;
 
@@ -34,6 +35,7 @@ public class Product implements Serializable {
     private Integer quantity;
 
     @Column(name = "price")
+    @NotNull
     @Positive
     private Double price;
 }

@@ -47,6 +47,8 @@ dependencies {
     implementation 'org.springframework.kafka:spring-kafka'
     implementation group: 'com.fasterxml.jackson.datatype', name: 'jackson-datatype-jsr310', version: '2.17.2'
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.5")
+    implementation group: 'org.liquibase', name: 'liquibase-core', version: '4.25.1'
+    implementation group: 'org.liquibase', name: 'liquibase-gradle-plugin', version: '2.2.1'
 }
 
 dependencyManagement {

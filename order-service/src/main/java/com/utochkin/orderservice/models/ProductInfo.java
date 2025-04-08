@@ -32,5 +32,4 @@ public class ProductInfo implements Serializable {
   @ManyToOne
   @JoinColumn(name = "order_id")
   private Order order;
-
 }

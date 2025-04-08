@@ -42,6 +42,7 @@ dependencies {
     testImplementation 'org.springframework.kafka:spring-kafka-test'
     testImplementation 'org.springframework.security:spring-security-test'
     implementation("org.springframework.boot:spring-boot-starter-data-mongodb:3.4.2")
+    implementation("jakarta.validation:jakarta.validation-api:3.0.2")
 }
 
 dependencyManagement {

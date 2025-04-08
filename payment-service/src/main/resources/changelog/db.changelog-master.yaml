@@ -1,0 +1,7 @@
+databaseChangeLog:
+  - include:
+      file: /tables/create_table_account.sql
+      relativeToChangeLogFile: true
+  - include:
+      file: /tables/init_accounts.sql
+      relativeToChangeLogFile: true

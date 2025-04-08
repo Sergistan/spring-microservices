@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - include:
+      file: /tables/address.sql
+      relativeToChangeLogFile: true
+  - include:
+      file: /tables/users.sql
+      relativeToChangeLogFile: true
+  - include:
+      file: /tables/orders.sql
+      relativeToChangeLogFile: true
+  - include:
+      file: /tables/product_infos.sql
+      relativeToChangeLogFile: true

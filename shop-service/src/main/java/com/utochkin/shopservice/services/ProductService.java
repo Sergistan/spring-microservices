@@ -2,6 +2,7 @@ package com.utochkin.shopservice.services;
 
 
 import com.utochkin.shopservice.dto.ProductDto;
+import com.utochkin.shopservice.dto.ProductDtoRequest;
 import com.utochkin.shopservice.exceptions.ProductNotFoundException;
 import com.utochkin.shopservice.mappers.ProductMapper;
 import com.utochkin.shopservice.models.Product;
@@ -133,7 +134,7 @@ public class ProductService {
             put = { @CachePut(value = "product", key = "#result.articleId") },
             evict = { @CacheEvict(value = "products", allEntries = true) }
     )
-    public ProductDto addProduct(ProductDto productDtoRequest) {
+    public ProductDto addProduct(ProductDtoRequest productDtoRequest) {
         ProductDto productDto = new ProductDto(UUID.randomUUID(), productDtoRequest.getName(), productDtoRequest.getQuantity(), productDtoRequest.getPrice());
         Product product = productMapper.toEntity(productDto);
         productRepository.save(product);
@@ -157,13 +158,13 @@ public class ProductService {
             put = { @CachePut(value = "product", key = "#articleId") },
             evict = { @CacheEvict(value = "products", allEntries = true) }
     )
-    public ProductDto updateProduct(UUID articleId, ProductDto productDto) {
+    public ProductDto updateProduct(UUID articleId, ProductDtoRequest productDtoRequest) {
         Optional <Product> productByArticleId = productRepository.findByArticleId(articleId);
         if(productByArticleId.isPresent()){
             Product product = productByArticleId.get();
-            product.setName(productDto.getName());
-            product.setQuantity(productDto.getQuantity());
-            product.setPrice(productDto.getPrice());
+            product.setName(productDtoRequest.getName());
+            product.setQuantity(productDtoRequest.getQuantity());
+            product.setPrice(productDtoRequest.getPrice());
 
             productRepository.save(product);
             return productMapper.toDto(product);

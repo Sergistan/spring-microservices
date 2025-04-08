@@ -1,9 +1,7 @@
 package com.utochkin.paymentservice.models;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.*;
 import lombok.*;
 
 @NoArgsConstructor
@@ -18,7 +16,7 @@ public class Account {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "card_number", nullable = false)
+    @Column(name = "card_number", nullable = false, unique = true)
     @NotEmpty
     @Pattern(
             regexp = "\\d{4} \\d{4} \\d{4} \\d{4}",
@@ -26,7 +24,8 @@ public class Account {
     )
     private String cardNumber;
 
-    @PositiveOrZero
+    @NotNull
+    @Positive
     @Column(name = "amount_money")
     private Double amountMoney;
 }
