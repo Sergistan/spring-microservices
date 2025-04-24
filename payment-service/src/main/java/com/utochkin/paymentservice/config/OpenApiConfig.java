@@ -20,8 +20,10 @@ import org.springframework.context.annotation.Configuration;
         scheme = "bearer",
         flows = @OAuthFlows(
                 authorizationCode = @OAuthFlow(
-                        authorizationUrl = "http://localhost:8080/realms/microservices-realm/protocol/openid-connect/auth",
-                        tokenUrl = "http://localhost:8080/realms/microservices-realm/protocol/openid-connect/token",
+//                        authorizationUrl = "http://localhost:8080/realms/microservices-realm/protocol/openid-connect/auth",
+//                        tokenUrl = "http://localhost:8080/realms/microservices-realm/protocol/openid-connect/token",
+                        authorizationUrl = "http://keycloak:8080/realms/microservices-realm/protocol/openid-connect/auth",
+                        tokenUrl = "http://keycloak:8080/realms/microservices-realm/protocol/openid-connect/token",
                         scopes = {
                                 @OAuthScope(name = "openid", description = "Доступ к OpenID"),
                                 @OAuthScope(name = "profile", description = "Доступ к профилю")
