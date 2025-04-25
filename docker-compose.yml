@@ -25,6 +25,12 @@ volumes:
     driver: local
   pgadmin:
     driver: local
+  esdata:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-storage:
+    driver: local
 
 services:
   postgres:
@@ -264,6 +270,9 @@ services:
     container_name: getaway-server
     environment:
       TZ: Europe/Moscow
+      SPRING_ZIPKIN_BASE_URL: http://zipkin:9411
+      SPRING_SLEUTH_SAMPLER_PROBABILITY: 0.1
+      SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED: false
     ports:
       - "8072:8072"
     networks:
@@ -272,6 +281,8 @@ services:
       - config-server
       - eureka-server
       - keycloak
+      - logstash
+      - zipkin
 
   order-service:
     build: ./order-service
@@ -287,6 +298,9 @@ services:
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       TZ: Europe/Moscow
+      SPRING_ZIPKIN_BASE_URL: http://zipkin:9411
+      SPRING_SLEUTH_SAMPLER_PROBABILITY: 0.1
+      SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED: false
     depends_on:
       - keycloak
       - redis
@@ -294,6 +308,8 @@ services:
       - config-server
       - getaway-server
       - kafka
+      - logstash
+      - zipkin
 
   shop-service:
     build: ./shop-service
@@ -308,6 +324,9 @@ services:
       SPRING_DATASOURCE_PASSWORD: 1234
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       TZ: Europe/Moscow
+      SPRING_ZIPKIN_BASE_URL: http://zipkin:9411
+      SPRING_SLEUTH_SAMPLER_PROBABILITY: 0.1
+      SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED: false
     depends_on:
       - keycloak
       - redis
@@ -315,6 +334,8 @@ services:
       - config-server
       - getaway-server
       - order-service
+      - logstash
+      - zipkin
 
   payment-service:
     build: ./payment-service
@@ -329,6 +350,9 @@ services:
       SPRING_DATASOURCE_PASSWORD: 1234
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       TZ: Europe/Moscow
+      SPRING_ZIPKIN_BASE_URL: http://zipkin:9411
+      SPRING_SLEUTH_SAMPLER_PROBABILITY: 0.1
+      SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED: false
     depends_on:
       - keycloak
       - redis
@@ -336,6 +360,8 @@ services:
       - config-server
       - getaway-server
       - order-service
+      - logstash
+      - zipkin
 
   notification-service:
     build: ./notification-service
@@ -347,11 +373,16 @@ services:
     environment:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       TZ: Europe/Moscow
+      SPRING_ZIPKIN_BASE_URL: http://zipkin:9411
+      SPRING_SLEUTH_SAMPLER_PROBABILITY: 0.1
+      SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED: false
     depends_on:
       - keycloak
       - config-server
       - getaway-server
       - kafka
+      - logstash
+      - zipkin
 
   history-service:
     build: ./history-service
@@ -364,6 +395,9 @@ services:
       SPRING_DATA_MONGODB_URI: mongodb://admin:pass@mongo:27017/HistoryServiceDB?authSource=admin
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       TZ: Europe/Moscow
+      SPRING_ZIPKIN_BASE_URL: http://zipkin:9411
+      SPRING_SLEUTH_SAMPLER_PROBABILITY: 0.1
+      SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED: false
     depends_on:
       - keycloak
       - config-server
@@ -371,4 +405,78 @@ services:
       - eureka-server
       - kafka
       - mongo
+      - logstash
+      - zipkin
     restart: on-failure
+
+  zipkin:
+    image: openzipkin/zipkin
+    container_name: zipkin
+    ports:
+      - "9411:9411"
+    networks:
+      - app-network
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus-data:/prometheus
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - app-network
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    ports:
+      - "3000:3000"
+    networks:
+      - app-network
+    volumes:
+      - grafana-storage:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.6.2
+    container_name: elasticsearch
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    networks:
+      - app-network
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.6.2
+    container_name: logstash
+    volumes:
+      - ./logstash/pipeline/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+    ports:
+      - "5000:5000"
+      - "9600:9600"
+    networks:
+      - app-network
+    depends_on:
+      - elasticsearch
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.6.2
+    container_name: kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    networks:
+      - app-network
+    depends_on:
+      - elasticsearch

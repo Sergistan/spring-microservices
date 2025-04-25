@@ -43,6 +43,13 @@ dependencies {
     testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     implementation("jakarta.validation:jakarta.validation-api:3.0.2")
+    implementation("org.springframework.cloud:spring-cloud-starter-zipkin:2.2.8.RELEASE")
+    implementation("org.springframework.boot:spring-boot-starter-actuator:3.4.2")
+    implementation("io.micrometer:micrometer-registry-prometheus:1.14.5")
+    implementation("net.logstash.logback:logstash-logback-encoder:8.0")
+    implementation("io.micrometer:micrometer-tracing:1.4.3")
+    implementation("io.micrometer:micrometer-tracing-bridge-brave:1.4.3")
+    implementation("org.springframework.cloud:spring-cloud-starter-sleuth:3.1.8")
 }
 
 dependencyManagement {
