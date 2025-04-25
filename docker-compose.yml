@@ -270,7 +270,7 @@ services:
     container_name: getaway-server
     environment:
       TZ: Europe/Moscow
-      SPRING_ZIPKIN_BASE_URL: http://zipkin:9411
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
       SPRING_SLEUTH_SAMPLER_PROBABILITY: 0.1
       SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED: false
     ports:
@@ -282,6 +282,7 @@ services:
       - eureka-server
       - keycloak
       - logstash
+      - elasticsearch
       - zipkin
 
   order-service:
@@ -298,7 +299,7 @@ services:
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       TZ: Europe/Moscow
-      SPRING_ZIPKIN_BASE_URL: http://zipkin:9411
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
       SPRING_SLEUTH_SAMPLER_PROBABILITY: 0.1
       SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED: false
     depends_on:
@@ -310,6 +311,7 @@ services:
       - kafka
       - logstash
       - zipkin
+      - elasticsearch
 
   shop-service:
     build: ./shop-service
@@ -324,7 +326,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: 1234
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       TZ: Europe/Moscow
-      SPRING_ZIPKIN_BASE_URL: http://zipkin:9411
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
       SPRING_SLEUTH_SAMPLER_PROBABILITY: 0.1
       SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED: false
     depends_on:
@@ -336,6 +338,7 @@ services:
       - order-service
       - logstash
       - zipkin
+      - elasticsearch
 
   payment-service:
     build: ./payment-service
@@ -350,7 +353,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: 1234
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       TZ: Europe/Moscow
-      SPRING_ZIPKIN_BASE_URL: http://zipkin:9411
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
       SPRING_SLEUTH_SAMPLER_PROBABILITY: 0.1
       SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED: false
     depends_on:
@@ -362,6 +365,7 @@ services:
       - order-service
       - logstash
       - zipkin
+      - elasticsearch
 
   notification-service:
     build: ./notification-service
@@ -373,7 +377,7 @@ services:
     environment:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       TZ: Europe/Moscow
-      SPRING_ZIPKIN_BASE_URL: http://zipkin:9411
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
       SPRING_SLEUTH_SAMPLER_PROBABILITY: 0.1
       SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED: false
     depends_on:
@@ -383,6 +387,7 @@ services:
       - kafka
       - logstash
       - zipkin
+      - elasticsearch
 
   history-service:
     build: ./history-service
@@ -395,7 +400,7 @@ services:
       SPRING_DATA_MONGODB_URI: mongodb://admin:pass@mongo:27017/HistoryServiceDB?authSource=admin
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       TZ: Europe/Moscow
-      SPRING_ZIPKIN_BASE_URL: http://zipkin:9411
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
       SPRING_SLEUTH_SAMPLER_PROBABILITY: 0.1
       SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED: false
     depends_on:
@@ -407,6 +412,7 @@ services:
       - mongo
       - logstash
       - zipkin
+      - elasticsearch
     restart: on-failure
 
   zipkin:
