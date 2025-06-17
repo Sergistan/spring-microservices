@@ -3,6 +3,7 @@ package com.utochkin.orderservice.services;
 
 import com.utochkin.orderservice.controllers.PaymentController;
 import com.utochkin.orderservice.controllers.ShopController;
+import com.utochkin.orderservice.dto.AddressDto;
 import com.utochkin.orderservice.dto.OrderDto;
 import com.utochkin.orderservice.dto.OrderDtoForKafka;
 import com.utochkin.orderservice.dto.UserDto;
@@ -10,6 +11,7 @@ import com.utochkin.orderservice.exceptions.FailedOrderStatusException;
 import com.utochkin.orderservice.exceptions.FailedPayOrderException;
 import com.utochkin.orderservice.exceptions.OrderNotFoundException;
 import com.utochkin.orderservice.exceptions.ServiceUnavailableException;
+import com.utochkin.orderservice.mappers.AddressMapper;
 import com.utochkin.orderservice.mappers.OrderMapper;
 import com.utochkin.orderservice.mappers.ProductInfoMapper;
 import com.utochkin.orderservice.mappers.UserMapper;
@@ -17,6 +19,7 @@ import com.utochkin.orderservice.models.*;
 import com.utochkin.orderservice.repositories.AddressRepository;
 import com.utochkin.orderservice.repositories.OrderRepository;
 import com.utochkin.orderservice.repositories.ProductInfoRepository;
+import com.utochkin.orderservice.repositories.UserRepository;
 import com.utochkin.orderservice.request.AccountRequest;
 import com.utochkin.orderservice.request.OrderRequest;
 import com.utochkin.orderservice.request.PaymentRequest;
@@ -44,10 +47,11 @@ public class OrderService {
     private final PaymentController paymentController;
     private final ProductInfoMapper productInfoMapper;
     private final OrderRepository orderRepository;
-    private final AddressRepository addressRepository;
     private final ProductInfoRepository productInfoRepository;
+    //    private final AddressRepository addressRepository;
     private final UserMapper userMapper;
     private final OrderMapper orderMapper;
+    private final AddressMapper addressMapper;
     private final KafkaSenderService kafkaSenderService;
 
     @Transactional(readOnly = true)
@@ -65,8 +69,9 @@ public class OrderService {
     @Transactional
     @CircuitBreaker(name = "circuitBreakerCreateOrder", fallbackMethod = "fallbackMethodCreateOrder")
     @Retry(name = "retryCreateOrder", fallbackMethod = "fallbackMethodCreateOrder")
-    public OrderDto createOrder(User user, List<OrderRequest> orderRequests, Address address) {
-        Address savedAddress = addressRepository.save(address);
+    public OrderDto createOrder(User user, List<OrderRequest> orderRequests, AddressDto addressDto) {
+        Address address = addressMapper.toEntity(addressDto);
+//        Address savedAddress = addressRepository.save(address);
 
         List<ProductInfo> listEntity = productInfoMapper.toListEntity(orderRequests);
         productInfoRepository.saveAll(listEntity);
@@ -77,7 +82,7 @@ public class OrderService {
         order.setOrderStatus(Status.WAITING_FOR_PAYMENT);
         order.setCreatedAt(LocalDateTime.now());
         order.setUpdatedAt(null);
-        order.setAddress(savedAddress);
+        order.setAddress(address);
         order.setUser(user);
         order.setPaymentId(null);
         order.setProductInfos(listEntity);
@@ -89,10 +94,10 @@ public class OrderService {
 
         UserDto userDto = userMapper.toDto(user);
 
-        return orderMapper.toDto(savedOrder, userDto, orderRequests);
+        return orderMapper.toDto(savedOrder, userDto, addressDto, orderRequests);
     }
 
-    public OrderDto fallbackMethodCreateOrder(User user, List<OrderRequest> orderRequests, Address address, Throwable throwable) {
+    public OrderDto fallbackMethodCreateOrder(User user, List<OrderRequest> orderRequests, AddressDto addressDto, Throwable throwable) {
         log.error("Fallback для createOrder сработал из-за: {}", throwable.getMessage());
         throw new ServiceUnavailableException("Сервис временно недоступен, пожалуйста, повторите попытку позже");
     }
@@ -104,6 +109,7 @@ public class OrderService {
         Optional<Order> orderById = orderRepository.findByOrderUuid(paymentRequest.getOrderUuid());
         if (orderById.isPresent()) {
             Order order = orderById.get();
+            AddressDto addressDto = addressMapper.toDto(order.getAddress());
             switch (order.getOrderStatus()) {
                 case SUCCESS -> throw new FailedOrderStatusException("Заказ уже оплачен!");
                 case REFUNDED -> throw new FailedOrderStatusException("Заказ отменен, необходимо создать новый заказ!");
@@ -126,7 +132,7 @@ public class OrderService {
                             ))
                             .toList();
 
-                    OrderDtoForKafka dtoForKafka = orderMapper.toDtoForKafka(saveOrder, userMapper.toDto(saveOrder.getUser()),orderRequests);
+                    OrderDtoForKafka dtoForKafka = orderMapper.toDtoForKafka(saveOrder, userMapper.toDto(saveOrder.getUser()), addressDto, orderRequests);
 
                     kafkaSenderService.send(dtoForKafka);
                 }
@@ -144,7 +150,7 @@ public class OrderService {
                             ))
                             .toList();
 
-                    OrderDtoForKafka dtoForKafka = orderMapper.toDtoForKafka(saveOrder, userMapper.toDto(saveOrder.getUser()),orderRequests);
+                    OrderDtoForKafka dtoForKafka = orderMapper.toDtoForKafka(saveOrder, userMapper.toDto(saveOrder.getUser()), addressDto, orderRequests);
 
                     kafkaSenderService.send(dtoForKafka);
 
@@ -177,6 +183,7 @@ public class OrderService {
         Optional<Order> orderById = orderRepository.findByOrderUuid(paymentRequest.getOrderUuid());
         if (orderById.isPresent()) {
             Order order = orderById.get();
+            AddressDto addressDto = addressMapper.toDto(order.getAddress());
             switch (order.getOrderStatus()) {
                 case WAITING_FOR_PAYMENT, FAILED, REFUNDED ->
                         throw new FailedOrderStatusException("Заказ нельзя отменить, т.к. он не был оплачен!");
@@ -212,7 +219,7 @@ public class OrderService {
 
                 Order saveOrder = orderRepository.save(order);
 
-                OrderDtoForKafka dtoForKafka = orderMapper.toDtoForKafka(saveOrder, userMapper.toDto(saveOrder.getUser()),orderRequests);
+                OrderDtoForKafka dtoForKafka = orderMapper.toDtoForKafka(saveOrder, userMapper.toDto(saveOrder.getUser()), addressDto, orderRequests);
 
                 kafkaSenderService.send(dtoForKafka);
             }

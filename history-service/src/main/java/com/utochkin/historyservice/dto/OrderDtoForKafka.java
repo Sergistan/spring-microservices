@@ -1,7 +1,6 @@
 package com.utochkin.historyservice.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
-import com.utochkin.historyservice.models.Address;
 import com.utochkin.historyservice.models.OrderRequest;
 import com.utochkin.historyservice.models.Status;
 import jakarta.validation.constraints.Positive;
@@ -36,7 +35,7 @@ public class OrderDtoForKafka implements Serializable {
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm")
     private LocalDateTime updatedAt;
 
-    private Address address;
+    private AddressDto addressDto;
 
     private UserDto userDto;
 

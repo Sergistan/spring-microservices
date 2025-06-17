@@ -49,14 +49,77 @@ services:
     ports:
       - "5432:5432"
 
+#  keycloak:
+#    container_name: keycloak
+#    image: quay.io/keycloak/keycloak:26.0.6
+#    command:
+#      - "start-dev"
+#    restart: always
+#    environment:
+#      KC_DB: postgres
+#      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+#      KC_DB_USERNAME: keycloak
+#      KC_DB_PASSWORD: keycloak
+#      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+#      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+#      TZ: Europe/Moscow
+#    ports:
+#      - "8080:8080"
+#    networks:
+#      - app-network
+#    volumes:
+#      - keycloak-data:/opt/keycloak/data
+#    depends_on:
+#      - postgres
+
+#  keycloak:
+#    container_name: keycloak
+#    image: quay.io/keycloak/keycloak:26.0.6
+#    command:
+#      - start-dev
+#      - "--https-key-store-file=/opt/keycloak/localhost.pfx"
+#      - "--https-key-store-password=password"
+#    restart: always
+#    environment:
+#      QUARKUS_HTTP_COOKIE_SAME_SITE: "None"
+#      QUARKUS_HTTP_COOKIE_SECURE: "false"
+#      KC_HOSTNAME_PROVIDER: 'fixed'
+#      KC_HOSTNAME: 'localhost'
+#      KC_HTTPS_PORT: '8443'
+#      KC_DB: postgres
+#      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+#      KC_DB_USERNAME: keycloak
+#      KC_DB_PASSWORD: keycloak
+#      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+#      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+#      TZ: Europe/Moscow
+#    ports:
+#      - "8443:8443"
+#    networks:
+#      - app-network
+#    volumes:
+#      - keycloak-data:/opt/keycloak/data
+#      - ./localhost.pfx:/opt/keycloak/localhost.pfx
+#      - ./rootCA.pem:/etc/x509/https/rootCA.pem:ro
+#    depends_on:
+#      - postgres
 
   keycloak:
     container_name: keycloak
     image: quay.io/keycloak/keycloak:26.0.6
     command:
-      - "start-dev"
-    restart: always
+      - start-dev
+      - "--http-port=8080"
     environment:
+      QUARKUS_HTTP_COOKIE_SAME_SITE: "None"
+      QUARKUS_HTTP_COOKIE_SECURE: "false"
+      KEYCLOAK_FRONTEND_URL: http://localhost:8072
+      KC_HOSTNAME_PROVIDER: "fixed"
+      KC_HOSTNAME: "keycloak"
+      KC_HTTP_ENABLED: "true"
+      KC_HTTP_PORT: "8080"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: keycloak
@@ -70,8 +133,6 @@ services:
       - app-network
     volumes:
       - keycloak-data:/opt/keycloak/data
-    depends_on:
-      - postgres
 
   postgres-order:
     image: postgres:15

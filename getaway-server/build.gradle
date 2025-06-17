@@ -1,6 +1,6 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.3.6'
+    id 'org.springframework.boot' version '3.4.0'
     id 'io.spring.dependency-management' version '1.1.6'
 }
 
@@ -30,7 +30,6 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok'
     implementation group: 'org.springframework.boot', name: 'spring-boot-starter-security', version: '3.3.5'
     implementation group: 'org.springframework.boot', name: 'spring-boot-starter-actuator', version: '3.3.5'
-    implementation group: 'org.springframework.boot', name: 'spring-boot-starter-security', version: '3.3.5'
     implementation group: 'org.springframework.boot', name: 'spring-boot-starter-oauth2-resource-server', version: '3.3.3'
     implementation group: 'org.springframework.boot', name: 'spring-boot-starter-oauth2-client', version: '3.3.3'
     implementation group: 'org.springframework.security', name: 'spring-security-oauth2-jose', version: '6.3.3'
@@ -40,7 +39,7 @@ dependencies {
     implementation group: 'io.jsonwebtoken', name: 'jjwt', version: '0.12.0'
     runtimeOnly group: 'io.jsonwebtoken', name: 'jjwt-impl', version: '0.11.5'
     implementation group: 'io.jsonwebtoken', name: 'jjwt-api', version: '0.11.5'
-    implementation("org.springdoc:springdoc-openapi-starter-webflux-ui:2.6.0")
+    implementation("org.springdoc:springdoc-openapi-starter-webflux-ui:2.8.6")
     implementation("org.springframework.cloud:spring-cloud-starter-zipkin:2.2.8.RELEASE")
     implementation("org.springframework.cloud:spring-cloud-starter-sleuth:3.1.8")
     implementation("org.springframework.boot:spring-boot-starter-actuator:3.4.2")
@@ -48,6 +47,7 @@ dependencies {
     implementation("net.logstash.logback:logstash-logback-encoder:8.0")
     implementation("io.micrometer:micrometer-tracing:1.4.3")
     implementation("io.micrometer:micrometer-tracing-bridge-brave:1.4.3")
+
 }
 
 dependencyManagement {

@@ -1,7 +1,6 @@
 package com.utochkin.orderservice.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
-import com.utochkin.orderservice.models.Address;
 import com.utochkin.orderservice.models.Status;
 import com.utochkin.orderservice.request.OrderRequest;
 import lombok.AllArgsConstructor;
@@ -28,7 +27,7 @@ public class OrderDtoForKafka implements Serializable {
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm")
     private LocalDateTime updatedAt;
 
-    private final Address address;
+    private final AddressDto addressDto;
 
     private final UserDto userDto;
 

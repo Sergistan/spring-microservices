@@ -46,13 +46,13 @@ public class NotificationConsumer {
                             .append(orderDto.getPaymentId())
                             .append(".\n\n");
                     sb.append("Заказ будет отправлен по адресу: ")
-                            .append(orderDto.getAddress().city())
+                            .append(orderDto.getAddressDto().city())
                             .append(", ")
-                            .append(orderDto.getAddress().street())
+                            .append(orderDto.getAddressDto().street())
                             .append(", дом № ")
-                            .append(orderDto.getAddress().houseNumber())
+                            .append(orderDto.getAddressDto().houseNumber())
                             .append(", квартира № ")
-                            .append(orderDto.getAddress().apartmentNumber())
+                            .append(orderDto.getAddressDto().apartmentNumber())
                             .append(".\n\n");
                     sb.append("Дата создания заказа: ")
                             .append(orderDto.getCreatedAt().toString().replace("T", " "))

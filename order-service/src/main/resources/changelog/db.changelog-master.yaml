@@ -11,3 +11,9 @@ databaseChangeLog:
   - include:
       file: /tables/product_infos.sql
       relativeToChangeLogFile: true
+  - include:
+      file: /tables/change_constraint_product_infos.sql
+      relativeToChangeLogFile: true
+  - include:
+      file: /tables/change_constraint_address.sql
+      relativeToChangeLogFile: true

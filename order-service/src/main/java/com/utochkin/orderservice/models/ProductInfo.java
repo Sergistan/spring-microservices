@@ -21,7 +21,7 @@ public class ProductInfo implements Serializable {
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
-  @Column(name = "article_id", unique = true)
+  @Column(name = "article_id")
   @NotEmpty
   private UUID articleId;
 

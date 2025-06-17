@@ -38,7 +38,8 @@ public class OrderController {
     @PostMapping("/create")
     @Operation(summary = "Создание заказа")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Заказ успешно создан", content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrderDto.class))),
+            @ApiResponse(responseCode = "200", description = "Заказ оплачен", content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrderDto.class))),
+            @ApiResponse(responseCode = "201", description = "Заказ создан", content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrderDto.class))),
             @ApiResponse(responseCode = "400", description = "Плохой запрос", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "402", description = "Ошибка оплаты заказа", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "404", description = "Не найдено", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
@@ -68,7 +69,7 @@ public class OrderController {
         if (!orderService.checkOrder(compositeRequest.getOrderRequests())) {
             return new ResponseEntity<>("У нас нет товара в таком количестве или вы неправильно задали артикул товара", HttpStatus.BAD_REQUEST);
         } else {
-            OrderDto orderDto = orderService.createOrder(user, compositeRequest.getOrderRequests(), compositeRequest.getAddress());
+            OrderDto orderDto = orderService.createOrder(user, compositeRequest.getOrderRequests(), compositeRequest.getAddressDto());
             return new ResponseEntity<>(orderDto, HttpStatus.CREATED);
         }
     }

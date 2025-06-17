@@ -1,8 +1,6 @@
 package com.utochkin.notificationservice.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
-
-import com.utochkin.notificationservice.models.Address;
 import com.utochkin.notificationservice.models.OrderRequest;
 import com.utochkin.notificationservice.models.Status;
 import jakarta.validation.constraints.NotEmpty;
@@ -35,7 +33,7 @@ public class OrderDtoForKafka implements Serializable {
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm")
     private LocalDateTime updatedAt;
 
-    private Address address;
+    private AddressDto addressDto;
 
     private UserDto userDto;
 

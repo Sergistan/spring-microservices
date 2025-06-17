@@ -22,12 +22,12 @@ public class Address implements Serializable {
     @Schema(description = "ID адреса", example = "29")
     private Long id;
 
-    @Column(name = "city", unique = true)
+    @Column(name = "city")
     @Schema(description = "Город", example = "Los Angeles")
     @NotEmpty
     private String city;
 
-    @Column(name = "street", unique = true)
+    @Column(name = "street")
     @Schema(description = "Улица", example = "33th Avenue")
     @NotEmpty
     private String street;
