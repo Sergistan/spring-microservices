@@ -18,7 +18,6 @@ import org.springframework.web.cors.reactive.CorsWebFilter;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 import reactor.core.publisher.Mono;
 
-
 import java.util.List;
 
 import static org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers.pathMatchers;
@@ -98,7 +97,6 @@ public class ReactiveConfig {
                         "/v3/api-docs/**",
                         "/order/v3/api-docs**",
                         "/shop/v3/api-docs**",
-                        "/payment/v3/api-docs**",
                         // OAuth2 flow
                         "/oauth2/**",
                         "/login/oauth2/**",
@@ -107,11 +105,8 @@ public class ReactiveConfig {
                         "/webjars/swagger-ui/oauth2-redirect.html"
                 ))
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
-                .authorizeExchange(ex -> ex
-                        .anyExchange().permitAll()
-                )
-                .oauth2Login(oauth2 -> oauth2
-                        .authenticationSuccessHandler(successHandler))
+                .authorizeExchange(ex -> ex.anyExchange().permitAll())
+                .oauth2Login(oauth2 -> oauth2.authenticationSuccessHandler(successHandler))
                 .oauth2Client(Customizer.withDefaults());
         return http.build();
     }
@@ -122,8 +117,7 @@ public class ReactiveConfig {
         http
                 .securityMatcher(pathMatchers(
                         "/order/api/v1/**",
-                        "/shop/api/v1/**",
-                        "/payment/api/v1/**"
+                        "/shop/api/v1/**"
                 ))
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .authorizeExchange(ex -> ex

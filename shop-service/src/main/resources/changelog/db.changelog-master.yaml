@@ -5,3 +5,6 @@ databaseChangeLog:
   - include:
       file: /tables/init_products.sql
       relativeToChangeLogFile: true
+  - include:
+      file: /tables/change_constraint_products.sql
+      relativeToChangeLogFile: true

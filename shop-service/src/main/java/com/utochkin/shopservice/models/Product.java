@@ -22,11 +22,11 @@ public class Product implements Serializable {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "article_id", nullable = false, columnDefinition = "UUID", unique = true)
+    @Column(name = "article_id", nullable = false, columnDefinition = "UUID")
     @NotEmpty
     private UUID articleId;
 
-    @Column(name = "name", unique = true)
+    @Column(name = "name")
     @NotEmpty
     private String name;
 

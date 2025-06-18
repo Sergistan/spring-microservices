@@ -51,7 +51,7 @@ import org.springframework.context.annotation.Configuration;
         ),
         security = @SecurityRequirement(name = "oauth2"),
         servers = {
-                @Server(url = "/", description = "Без префикса для gateway")
+                @Server(url = "/")
         }
 )
 @SecurityScheme(
