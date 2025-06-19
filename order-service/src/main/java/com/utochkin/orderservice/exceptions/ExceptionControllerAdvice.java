@@ -37,4 +37,9 @@ public class ExceptionControllerAdvice {
     public ErrorResponse handlerFailedOrderStatusException(FailedOrderStatusException failedOrderStatusException) {
         return new ErrorResponse(failedOrderStatusException.getMessage());
     }
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    @ExceptionHandler(CardNumberNotFoundException.class)
+    public ErrorResponse handlerCardNumberNotFoundException(CardNumberNotFoundException cardNumberNotFoundException) {
+        return new ErrorResponse(cardNumberNotFoundException.getMessage());
+    }
 }

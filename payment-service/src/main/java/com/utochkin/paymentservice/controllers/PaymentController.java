@@ -19,7 +19,7 @@ public class PaymentController {
     private final PaymentService paymentService;
 
     @PostMapping("/pay")
-    PaymentResponse payOrder(@RequestBody @Valid AccountRequest accountRequest){
+    PaymentResponse paymentOrder(@RequestBody @Valid AccountRequest accountRequest){
         return paymentService.paymentOrder(accountRequest);
     }
 

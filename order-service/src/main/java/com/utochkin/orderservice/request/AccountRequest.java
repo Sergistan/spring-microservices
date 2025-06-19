@@ -14,7 +14,7 @@ public class AccountRequest {
     @NotEmpty
     @Pattern(
             regexp = "\\d{4} \\d{4} \\d{4} \\d{4}",
-            message = "Номер карты должен быть в формате '1234 5678 9012 3456'"
+            message = "Номер карты должен быть в формате '5078 6038 0721 8893'"
     )
     private String cardNumber;
 }

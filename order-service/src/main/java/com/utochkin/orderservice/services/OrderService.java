@@ -7,27 +7,24 @@ import com.utochkin.orderservice.dto.AddressDto;
 import com.utochkin.orderservice.dto.OrderDto;
 import com.utochkin.orderservice.dto.OrderDtoForKafka;
 import com.utochkin.orderservice.dto.UserDto;
-import com.utochkin.orderservice.exceptions.FailedOrderStatusException;
-import com.utochkin.orderservice.exceptions.FailedPayOrderException;
-import com.utochkin.orderservice.exceptions.OrderNotFoundException;
-import com.utochkin.orderservice.exceptions.ServiceUnavailableException;
+import com.utochkin.orderservice.exceptions.*;
 import com.utochkin.orderservice.mappers.AddressMapper;
 import com.utochkin.orderservice.mappers.OrderMapper;
 import com.utochkin.orderservice.mappers.ProductInfoMapper;
 import com.utochkin.orderservice.mappers.UserMapper;
 import com.utochkin.orderservice.models.*;
-import com.utochkin.orderservice.repositories.AddressRepository;
 import com.utochkin.orderservice.repositories.OrderRepository;
 import com.utochkin.orderservice.repositories.ProductInfoRepository;
-import com.utochkin.orderservice.repositories.UserRepository;
 import com.utochkin.orderservice.request.AccountRequest;
 import com.utochkin.orderservice.request.OrderRequest;
 import com.utochkin.orderservice.request.PaymentRequest;
 import com.utochkin.orderservice.request.PaymentResponse;
+import feign.FeignException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,7 +45,6 @@ public class OrderService {
     private final ProductInfoMapper productInfoMapper;
     private final OrderRepository orderRepository;
     private final ProductInfoRepository productInfoRepository;
-    //    private final AddressRepository addressRepository;
     private final UserMapper userMapper;
     private final OrderMapper orderMapper;
     private final AddressMapper addressMapper;
@@ -71,7 +67,6 @@ public class OrderService {
     @Retry(name = "retryCreateOrder", fallbackMethod = "fallbackMethodCreateOrder")
     public OrderDto createOrder(User user, List<OrderRequest> orderRequests, AddressDto addressDto) {
         Address address = addressMapper.toEntity(addressDto);
-//        Address savedAddress = addressRepository.save(address);
 
         List<ProductInfo> listEntity = productInfoMapper.toListEntity(orderRequests);
         productInfoRepository.saveAll(listEntity);
@@ -164,13 +159,7 @@ public class OrderService {
     }
 
     public PaymentResponse fallbackMethodPayOrder(PaymentRequest paymentRequest, Throwable throwable) {
-        if (throwable instanceof FailedOrderStatusException ||
-                throwable instanceof FailedPayOrderException ||
-                throwable instanceof OrderNotFoundException) {
-            throw throwable instanceof RuntimeException
-                    ? (RuntimeException) throwable
-                    : new RuntimeException(throwable);
-        }
+        extractedFullbackMethod(paymentRequest, throwable);
         log.error("Fallback для paymentOrder сработал из-за: {}", throwable.getMessage());
         throw new ServiceUnavailableException("Сервис временно недоступен, пожалуйста, повторите попытку позже");
     }
@@ -229,16 +218,32 @@ public class OrderService {
     }
 
     public void fallbackMethodRefundedOrder(PaymentRequest paymentRequest, Throwable throwable) {
+        extractedFullbackMethod(paymentRequest, throwable);
+        log.error("Fallback для refundedOrder сработал из-за: {}", throwable.getMessage());
+        throw new ServiceUnavailableException("Сервис временно недоступен, пожалуйста, повторите попытку позже");
+    }
+
+    private static void extractedFullbackMethod(PaymentRequest paymentRequest, Throwable throwable) {
+        if (throwable instanceof FeignException fe) {
+            if (fe.status() == HttpStatus.NOT_FOUND.value()) {
+                log.warn("Карта {} не найдена в платёжном сервисе (404)", paymentRequest.getCardNumber());
+                throw new CardNumberNotFoundException();
+            }
+            if (fe.status() == HttpStatus.PAYMENT_REQUIRED.value()) {
+                log.warn("Недостаточно средств на карте {} (402)", paymentRequest.getCardNumber());
+                throw new FailedPayOrderException();
+            }
+        }
         if (throwable instanceof FailedOrderStatusException ||
+                throwable instanceof CardNumberNotFoundException ||
                 throwable instanceof FailedPayOrderException ||
                 throwable instanceof OrderNotFoundException) {
             throw throwable instanceof RuntimeException
                     ? (RuntimeException) throwable
                     : new RuntimeException(throwable);
         }
-        log.error("Fallback для refundedOrder сработал из-за: {}", throwable.getMessage());
-        throw new ServiceUnavailableException("Сервис временно недоступен, пожалуйста, повторите попытку позже");
     }
+
 
 }
 

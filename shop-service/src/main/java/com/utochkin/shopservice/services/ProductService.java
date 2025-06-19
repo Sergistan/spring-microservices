@@ -18,6 +18,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -56,7 +58,7 @@ public class ProductService {
 
         Map<UUID, Double> productPrices = products.stream().collect(Collectors.toMap(Product::getArticleId, Product::getPrice));
 
-        return orderRequests.stream()
+        double rawSum = orderRequests.stream()
                 .mapToDouble(orderRequest -> {
                     Double price = productPrices.get(orderRequest.getArticleId());
                     if (price == null) {
@@ -65,6 +67,10 @@ public class ProductService {
                     return price * orderRequest.getQuantity();
                 })
                 .sum();
+
+        BigDecimal rounded = BigDecimal.valueOf(rawSum).setScale(2, RoundingMode.HALF_UP);
+
+        return rounded.doubleValue();
     }
 
     @Transactional
