@@ -3,7 +3,7 @@ package com.utochkin.getawayserver.config;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import lombok.SneakyThrows;
-import lombok.extern.slf4j.Slf4j;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
@@ -83,7 +83,7 @@ import java.util.Map;
 
 
 @Component
-@Slf4j
+@Log4j2
 public class JwtTokenFilter implements GlobalFilter, Ordered {
 
     @Value("${jwt.public-key}")
@@ -99,9 +99,17 @@ public class JwtTokenFilter implements GlobalFilter, Ordered {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+
+        log.info("JwtTokenFilter: incoming request {} {}", exchange.getRequest().getMethod(), exchange.getRequest().getURI());
+
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
+
+            log.debug("JwtTokenFilter: found Bearer token, parsing…");
+
             Claims claims = parseJwtToken(token);
+
+            log.info("JwtTokenFilter: authenticated user sub={} username={}", claims.get("sub"), claims.get("preferred_username"));
 
             // Собираем мутированный запрос
             ServerHttpRequest mutatedReq = exchange.getRequest()
@@ -114,16 +122,14 @@ public class JwtTokenFilter implements GlobalFilter, Ordered {
                     .header("X-User-Role", extractRole(claims))
                     .build();
 
-            // Создаём новый exchange с этим запросом
-            ServerWebExchange mutatedExchange = exchange.mutate()
-                    .request(mutatedReq)
-                    .build();
+            log.info("JwtTokenFilter: headers injected, forwarding mutated request");
 
-            // И дальше пускаем мутированный exchange
+            ServerWebExchange mutatedExchange = exchange.mutate().request(mutatedReq).build();
+
             return chain.filter(mutatedExchange);
         }
+        log.info("JwtTokenFilter: no Authorization header, forwarding original request");
 
-        // если нет авторизации — пускаем оригинал
         return chain.filter(exchange);
     }
 
@@ -131,14 +137,14 @@ public class JwtTokenFilter implements GlobalFilter, Ordered {
         Map<String, Object> resourceAccess = claims.get("resource_access", Map.class);
         Map<String, Object> clientAccess = (Map<String, Object>) resourceAccess.get("spring-microservices");
         List<String> roles = (List<String>) clientAccess.get("roles");
-        return (roles != null && !roles.isEmpty())
-                ? roles.get(0)
-                : "UNKNOWN";
+
+        return (roles != null && !roles.isEmpty()) ? roles.get(0) : "UNKNOWN";
     }
 
 
         private Claims parseJwtToken(String token) throws Exception {
         PublicKey key = readRsaPublicKey(publicKey);
+
         return Jwts.parserBuilder()
                 .setSigningKey(key)
                 .build()
@@ -147,7 +153,7 @@ public class JwtTokenFilter implements GlobalFilter, Ordered {
     }
 
     private static PublicKey readRsaPublicKey(String pemEncodedKey) throws Exception {
-        // Удаляем заголовок и окончание, если они есть
+
         String publicKeyPEM = pemEncodedKey
                 .replace("-----BEGIN PUBLIC KEY-----", "")
                 .replace("-----END PUBLIC KEY-----", "")

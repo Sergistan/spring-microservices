@@ -56,6 +56,7 @@ public class Order implements Serializable {
     @JoinColumn(name = "user_id")
     private User user;
 
+    @Builder.Default
     @OneToMany(mappedBy = "order")
     private List<ProductInfo> productInfos = new LinkedList<>();
 

@@ -18,5 +18,10 @@ public class PaymentRequest {
             regexp = "\\d{4} \\d{4} \\d{4} \\d{4}",
             message = "Номер карты должен быть в формате '5078 6038 0721 8893'"
     )
+    @Schema(
+            description = "Номер карты в формате '5078 6038 0721 8893'",
+            example     = "\"5078 6038 0721 8893\"",
+            type        = "string"
+    )
     private String cardNumber;
 }

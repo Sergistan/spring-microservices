@@ -1,6 +1,8 @@
-package com.utochkin.paymentservice;
+package com.utochkin.orderservice;
 
-import com.utochkin.paymentservice.repositories.AccountRepository;
+import com.utochkin.orderservice.repositories.OrderRepository;
+import com.utochkin.orderservice.repositories.ProductInfoRepository;
+import com.utochkin.orderservice.repositories.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -21,14 +23,24 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
                 "spring.cloud.compatibility-verifier.enabled=false"
         }
 )
-class PaymentServiceApplicationTests {
+public class OrderServiceApplicationTests {
 
     @TestConfiguration
     static class SecurityTestConfig {
 
         @Bean
-        public AccountRepository mockAccountRepository() {
-            return Mockito.mock(AccountRepository.class);
+        public ProductInfoRepository mockProductInfoRepository() {
+            return Mockito.mock(ProductInfoRepository.class);
+        }
+
+        @Bean
+        public UserRepository mockUserRepository() {
+            return Mockito.mock(UserRepository.class);
+        }
+
+        @Bean
+        public OrderRepository mockOrderRepository() {
+            return Mockito.mock(OrderRepository.class);
         }
 
         @Bean

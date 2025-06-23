@@ -61,8 +61,6 @@ import org.springframework.context.annotation.Configuration;
         scheme = "bearer",
         flows       = @OAuthFlows(
                 authorizationCode = @OAuthFlow(
-//                        authorizationUrl  = "http://localhost:8080/realms/microservices-realm/protocol/openid-connect/auth",
-//                        tokenUrl          = "http://localhost:8080/realms/microservices-realm/protocol/openid-connect/token",
                         authorizationUrl = "http://localhost:8072/oauth2/authorization/keycloak",
                         tokenUrl         = "http://localhost:8072/login/oauth2/code/keycloak",
                         scopes = {

@@ -1,13 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
 
-    <springProperty scope="context" name="logstashHost" source="logging.logstash.host"/>
-    <springProperty scope="context" name="logstashPort" source="logging.logstash.port"/>
+    <springProperty name="logstashHost" source="logging.logstash.host" defaultValue="localhost"/>
+    <springProperty name="logstashPort" source="logging.logstash.port" defaultValue="5000"/>
 
-    <appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
-        <destination>${logstashHost}:${logstashPort}</destination>
-        <encoder class="net.logstash.logback.encoder.LogstashEncoder"/>
-    </appender>
+    <springProfile name="!test">
+        <appender name="LOGSTASH"
+                  class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+            <destination>${logstashHost}:${logstashPort}</destination>
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder"/>
+        </appender>
+    </springProfile>
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
@@ -19,4 +22,5 @@
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="LOGSTASH"/>
     </root>
+
 </configuration>

@@ -108,6 +108,7 @@ public class ReactiveConfig {
                 .authorizeExchange(ex -> ex.anyExchange().permitAll())
                 .oauth2Login(oauth2 -> oauth2.authenticationSuccessHandler(successHandler))
                 .oauth2Client(Customizer.withDefaults());
+
         return http.build();
     }
 

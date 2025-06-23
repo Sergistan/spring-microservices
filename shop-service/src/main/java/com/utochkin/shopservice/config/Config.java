@@ -30,7 +30,7 @@ public class Config {
                         exception.accessDeniedHandler(customAccessDeniedHandler)
                 )
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**", "/favicon.ico").permitAll()
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**", "/favicon.ico", "/actuator/prometheus").permitAll()
                         .requestMatchers("/shop/api/v1/addProduct").hasRole("ADMIN")
                         .requestMatchers("/shop/api/v1/deleteProduct/{id}").hasRole("ADMIN")
                         .requestMatchers("/shop/api/v1/updateProduct").hasRole("ADMIN")

@@ -54,6 +54,7 @@ public class OrderService {
     @CircuitBreaker(name = "circuitBreakerCheckOrder", fallbackMethod = "fallbackMethodCheckOrder")
     @Retry(name = "retryCheckOrder", fallbackMethod = "fallbackMethodCheckOrder")
     public Boolean checkOrder(List<OrderRequest> orderRequests) {
+        log.info("OrderService: проверка наличия товаров: {}", orderRequests);
         return shopController.checkOrder(orderRequests);
     }
 
@@ -66,6 +67,8 @@ public class OrderService {
     @CircuitBreaker(name = "circuitBreakerCreateOrder", fallbackMethod = "fallbackMethodCreateOrder")
     @Retry(name = "retryCreateOrder", fallbackMethod = "fallbackMethodCreateOrder")
     public OrderDto createOrder(User user, List<OrderRequest> orderRequests, AddressDto addressDto) {
+        log.info("OrderService: начало создания заказа для user={} requests={}", user.getUsername(), orderRequests);
+
         Address address = addressMapper.toEntity(addressDto);
 
         List<ProductInfo> listEntity = productInfoMapper.toListEntity(orderRequests);
@@ -89,6 +92,8 @@ public class OrderService {
 
         UserDto userDto = userMapper.toDto(user);
 
+        log.info("OrderService: заказ {} создан успешно", savedOrder.getOrderUuid());
+
         return orderMapper.toDto(savedOrder, userDto, addressDto, orderRequests);
     }
 
@@ -101,6 +106,8 @@ public class OrderService {
     @CircuitBreaker(name = "circuitBreakerPayOrder", fallbackMethod = "fallbackMethodPayOrder")
     @Retry(name = "retryPayOrder", fallbackMethod = "fallbackMethodPayOrder")
     public PaymentResponse paymentOrder(PaymentRequest paymentRequest) {
+        log.info("OrderService: оплата заказа {}", paymentRequest.getOrderUuid());
+
         Optional<Order> orderById = orderRepository.findByOrderUuid(paymentRequest.getOrderUuid());
         if (orderById.isPresent()) {
             Order order = orderById.get();
@@ -152,6 +159,8 @@ public class OrderService {
                     throw new FailedPayOrderException();
                 }
             }
+            log.info("OrderService: статус оплаты {} для заказа {}", paymentResponse.getStatus(), paymentRequest.getOrderUuid());
+
             return paymentResponse;
         } else {
             throw new OrderNotFoundException();
@@ -169,6 +178,8 @@ public class OrderService {
     @CircuitBreaker(name = "circuitBreakerRefundedOrder", fallbackMethod = "fallbackMethodRefundedOrder")
     @Retry(name = "retryRefundedOrder", fallbackMethod = "fallbackMethodRefundedOrder")
     public void refundedOrder(PaymentRequest paymentRequest) {
+        log.info("OrderService: возврат заказа {}", paymentRequest.getOrderUuid());
+
         Optional<Order> orderById = orderRepository.findByOrderUuid(paymentRequest.getOrderUuid());
         if (orderById.isPresent()) {
             Order order = orderById.get();
@@ -211,6 +222,8 @@ public class OrderService {
                 OrderDtoForKafka dtoForKafka = orderMapper.toDtoForKafka(saveOrder, userMapper.toDto(saveOrder.getUser()), addressDto, orderRequests);
 
                 kafkaSenderService.send(dtoForKafka);
+
+                log.info("OrderService: возврат выполнен {}", paymentRequest.getOrderUuid());
             }
         } else {
             throw new OrderNotFoundException();
@@ -243,7 +256,5 @@ public class OrderService {
                     : new RuntimeException(throwable);
         }
     }
-
-
 }
 

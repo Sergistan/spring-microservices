@@ -45,6 +45,7 @@ public class User implements Serializable {
     @Enumerated(value = EnumType.STRING)
     private Role role;
 
+    @Builder.Default
     @OneToMany(mappedBy = "user")
     private List<Order> orders = new LinkedList<>();
 }

@@ -9,6 +9,7 @@ import com.utochkin.shopservice.models.Product;
 import com.utochkin.shopservice.repositories.ProductRepository;
 import com.utochkin.shopservice.requests.OrderRequest;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
@@ -29,6 +30,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Log4j2
 public class ProductService {
 
     private final ProductRepository productRepository;
@@ -36,22 +38,30 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public Boolean checkOrder(List<OrderRequest> orderRequests) {
+        log.info("ProductService: проверка остатков для {}", orderRequests);
+
         List<UUID> listUuids = orderRequests.stream().map(OrderRequest::getArticleId).toList();
 
         List<Product> products = productRepository.findAllByArticleIds(listUuids);
 
         Map<UUID, Integer> productQuantities = products.stream().collect(Collectors.toMap(Product::getArticleId, Product::getQuantity));
 
-        return orderRequests.stream()
+        boolean allAvailable  = orderRequests.stream()
                 .allMatch(orderRequest -> {
                     Integer availableQuantity = productQuantities.get(orderRequest.getArticleId());
                     return availableQuantity != null && availableQuantity >= orderRequest.getQuantity();
                 });
 
+        log.info("ProductService: количество продуктов {} для заказа", allAvailable ? "достаточно" : "недостаточно");
+
+        return allAvailable;
+
     }
 
     @Transactional(readOnly = true)
     public Double getSumTotalPriceOrder(List<OrderRequest> orderRequests){
+        log.info("ProductService: расчёт суммы для {}", orderRequests);
+
         List<UUID> listUuids = orderRequests.stream().map(OrderRequest::getArticleId).toList();
 
         List<Product> products = productRepository.findAllByArticleIds(listUuids);
@@ -70,11 +80,15 @@ public class ProductService {
 
         BigDecimal rounded = BigDecimal.valueOf(rawSum).setScale(2, RoundingMode.HALF_UP);
 
+        log.info("ProductService: сумма заказа {}", rounded);
+
         return rounded.doubleValue();
     }
 
     @Transactional
     public void changeTotalQuantityProductsAfterCreateOrder(List<OrderRequest> orderRequests) {
+        log.info("ProductService: уменьшаем остатки продуктов в бд после создания заказа {}", orderRequests);
+
         List<UUID> listUuids = orderRequests.stream().map(OrderRequest::getArticleId).toList();
 
         List<Product> products = productRepository.findAllByArticleIds(listUuids);
@@ -97,9 +111,13 @@ public class ProductService {
         }
 
         productRepository.saveAll(products);
+
+        log.info("ProductService: остатки обновлены");
     }
 
     public void changeTotalQuantityProductsAfterRefundedOrder(List<OrderRequest> orderRequests) {
+        log.info("ProductService: восстанавливаем остатки продуктов в бд после возврата {}", orderRequests);
+
         List<UUID> listUuids = orderRequests.stream().map(OrderRequest::getArticleId).toList();
 
         List<Product> products = productRepository.findAllByArticleIds(listUuids);
@@ -118,11 +136,14 @@ public class ProductService {
         }
 
         productRepository.saveAll(products);
+
+        log.info("ProductService: остатки восстановлены");
     }
 
     @Transactional(readOnly = true)
     @Cacheable(value = "products", key = "#pageable.pageNumber + '-' + #pageable.pageSize + '-' + #pageable.sort.toString()")
     public List<ProductDto> getAllProducts(Pageable pageable) {
+        log.info("ProductService: получение всех продуктов {}", pageable);
         Page<Product> productsPage = productRepository.findAll(pageable);
         return productMapper.toListDto(productsPage.getContent());
     }
@@ -130,6 +151,7 @@ public class ProductService {
     @Transactional(readOnly = true)
     @Cacheable(value = "product", key = "#articleId")
     public ProductDto getProduct(UUID articleId) {
+        log.info("ProductService: получение продукта {}", articleId);
         Product product = productRepository.findByArticleId(articleId).orElseThrow(() -> new ProductNotFoundException("Продукт с articleId " + articleId + " не найден"));
         return productMapper.toDto(product);
     }
@@ -141,6 +163,7 @@ public class ProductService {
             evict = { @CacheEvict(value = "products", allEntries = true) }
     )
     public ProductDto addProduct(ProductDtoRequest productDtoRequest) {
+        log.info("ProductService: добавление продукта {}", productDtoRequest);
         ProductDto productDto = new ProductDto(UUID.randomUUID(), productDtoRequest.getName(), productDtoRequest.getQuantity(), productDtoRequest.getPrice());
         Product product = productMapper.toEntity(productDto);
         productRepository.save(product);
@@ -150,6 +173,7 @@ public class ProductService {
     @Transactional
     @CacheEvict(value = {"products", "product"}, allEntries = true)
     public void deleteProduct(UUID articleId) {
+        log.info("ProductService: удаление продукта {}", articleId);
         Optional <Product> productByArticleId = productRepository.findByArticleId(articleId);
         if(productByArticleId.isPresent()){
             productRepository.deleteByArticleId(articleId);
@@ -165,6 +189,7 @@ public class ProductService {
             evict = { @CacheEvict(value = "products", allEntries = true) }
     )
     public ProductDto updateProduct(UUID articleId, ProductDtoRequest productDtoRequest) {
+        log.info("ProductService: обновление продукта {} -> {}", articleId, productDtoRequest);
         Optional <Product> productByArticleId = productRepository.findByArticleId(articleId);
         if(productByArticleId.isPresent()){
             Product product = productByArticleId.get();
