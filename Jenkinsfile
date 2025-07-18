@@ -15,11 +15,13 @@ pipeline {
             }
         }
 
-
-        stage('Build & Test') {
+stage('Build & Test') {
             steps {
-                // Windows‑команда для Gradle
-                bat 'gradlew.bat clean test --no-daemon'
+                // Запускаем Gradle‑wrapper через PowerShell
+                powershell """
+                    Write-Host "Запуск Gradle wrapper..."
+                    .\\gradlew.bat clean test --no-daemon
+                """
             }
         }
 
@@ -36,10 +38,10 @@ pipeline {
                         'notification-service',
                         'history-service'
                     ]
-                    for (svc in services) {
-                        bat """
-                            echo Building image for ${svc}
-                            docker build -t ${DOCKERHUB_NAMESPACE}/${svc}:%BUILD_NUMBER% .\\${svc}
+                    services.each { svc ->
+                        powershell """
+                            Write-Host "Building Docker image for ${svc}"
+                            docker build -t ${DOCKERHUB_NAMESPACE}/${svc}:${env.BUILD_NUMBER} .\\${svc}
                         """
                     }
                 }
@@ -49,8 +51,8 @@ pipeline {
         stage('Push to Docker Hub') {
             steps {
                 script {
-                    // Авторизация в DockerHub
-                    docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-creds') {
+                    // Передаём в withRegistry сам ID credentials, не переменную
+                    docker.withRegistry('https://registry.hub.docker.com', '2458a8bf-c1db-46c5-a39f-a6f5061da077') {
                         def services = [
                             'eureka-server',
                             'config-server',
@@ -61,8 +63,11 @@ pipeline {
                             'notification-service',
                             'history-service'
                         ]
-                        for (svc in services) {
-                            bat "docker push ${DOCKERHUB_NAMESPACE}/${svc}:%BUILD_NUMBER%"
+                        services.each { svc ->
+                            powershell """
+                                Write-Host "Pushing ${svc}:${env.BUILD_NUMBER} to Docker Hub"
+                                docker push ${DOCKERHUB_NAMESPACE}/${svc}:${env.BUILD_NUMBER}
+                            """
                         }
                     }
                 }
