@@ -33,9 +33,9 @@ pipeline {
                     ]
                     services.each { svc ->
                         powershell """
-                            Write-Host "=== Тестируем ${svc} ==="
+                            Write-Host "=== Собираем и тестируем ${svc} ==="
                             cd .\\${svc}
-                            ..\\gradlew.bat clean test --no-daemon
+                            ..\\gradlew.bat clean build --no-daemon
                             cd ..\\
                         """
                     }
