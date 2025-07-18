@@ -1,24 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
 
-    <springProperty scope="context" name="logstashHost" source="logging.logstash.host"/>
-    <springProperty scope="context" name="logstashPort" source="logging.logstash.port"/>
-
-    <springProfile name="!test">
-        <appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
-            <destination>${logging.logstash.host:localhost}:${logging.logstash.port:5000}</destination>
-            <encoder class="net.logstash.logback.encoder.LogstashEncoder"/>
-        </appender>
-    </springProfile>
-
+    <!-- Консольный аппендер всегда -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
         </encoder>
     </appender>
 
-    <root level="INFO">
-        <appender-ref ref="CONSOLE"/>
-        <appender-ref ref="LOGSTASH"/>
-    </root>
+    <!-- Logstash‑аппендер только вне тестов -->
+    <springProfile name="!test">
+        <appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+            <!-- Читаем напрямую из переменных окружения Docker -->
+            <destination>${LOGGING_LOGSTASH_HOST:-localhost}:${LOGGING_LOGSTASH_PORT:-5000}</destination>
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder"/>
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="LOGSTASH"/>
+        </root>
+    </springProfile>
+
+    <!-- Только консольный в тестах -->
+    <springProfile name="test">
+        <root level="WARN">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+
 </configuration>

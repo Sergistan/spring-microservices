@@ -50,6 +50,7 @@ dependencies {
     implementation("io.micrometer:micrometer-tracing:1.4.3")
     implementation("io.micrometer:micrometer-tracing-bridge-brave:1.4.3")
     implementation("org.springframework.cloud:spring-cloud-starter-sleuth:3.1.8")
+    testImplementation 'de.flapdoodle.embed:de.flapdoodle.embed.mongo:3.5.4'
 }
 
 dependencyManagement {

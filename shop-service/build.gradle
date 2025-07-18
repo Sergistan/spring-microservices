@@ -56,6 +56,7 @@ dependencies {
     implementation("io.micrometer:micrometer-tracing:1.4.3")
     implementation("io.micrometer:micrometer-tracing-bridge-brave:1.4.3")
     implementation("org.springframework.cloud:spring-cloud-starter-sleuth:3.1.8")
+    testImplementation "com.h2database:h2"
 }
 
 dependencyManagement {

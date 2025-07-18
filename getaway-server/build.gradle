@@ -47,6 +47,8 @@ dependencies {
     implementation("net.logstash.logback:logstash-logback-encoder:8.0")
     implementation("io.micrometer:micrometer-tracing:1.4.3")
     implementation("io.micrometer:micrometer-tracing-bridge-brave:1.4.3")
+    testImplementation("io.projectreactor:reactor-test:3.7.0")
+    implementation("org.springframework.cloud:spring-cloud-contract-wiremock:4.2.0")
 
 }
 

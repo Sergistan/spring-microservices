@@ -87,7 +87,7 @@ import java.util.Map;
 public class JwtTokenFilter implements GlobalFilter, Ordered {
 
     @Value("${jwt.public-key}")
-    private String publicKey;
+    public String publicKey;
 
     @Override
     public int getOrder() {

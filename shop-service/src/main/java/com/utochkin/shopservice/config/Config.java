@@ -31,9 +31,9 @@ public class Config {
                 )
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**", "/favicon.ico", "/actuator/prometheus").permitAll()
-                        .requestMatchers("/shop/api/v1/addProduct").hasRole("ADMIN")
-                        .requestMatchers("/shop/api/v1/deleteProduct/{id}").hasRole("ADMIN")
-                        .requestMatchers("/shop/api/v1/updateProduct").hasRole("ADMIN")
+                        .requestMatchers("/shop/api/v1/addProduct/**").hasRole("ADMIN")
+                        .requestMatchers("/shop/api/v1/deleteProduct/**").hasRole("ADMIN")
+                        .requestMatchers("/shop/api/v1/updateProduct/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .oauth2ResourceServer(oauth2 -> oauth2

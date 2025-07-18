@@ -10,7 +10,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class FeignUserTokenRelayInterceptor implements RequestInterceptor {
 
-
     @Override
     public void apply(RequestTemplate requestTemplate) {
         // Получаем текущую аутентификацию из SecurityContext

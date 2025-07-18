@@ -13,10 +13,4 @@ public class ExceptionControllerAdvice {
     public ErrorResponse handlerCardNumberNotFoundException(CardNumberNotFoundException cardNumberNotFoundException) {
         return new ErrorResponse(cardNumberNotFoundException.getMessage());
     }
-
-    @ResponseStatus(HttpStatus.PAYMENT_REQUIRED)
-    @ExceptionHandler(FailedPayOrderException.class)
-    public ErrorResponse handlerFailedPayOrderException(FailedPayOrderException failedPayOrderException) {
-        return new ErrorResponse(failedPayOrderException.getMessage());
-    }
 }

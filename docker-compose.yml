@@ -285,6 +285,8 @@ services:
       MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
       SPRING_SLEUTH_SAMPLER_PROBABILITY: 0.1
       SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED: false
+      LOGGING_LOGSTASH_HOST: logstash
+      LOGGING_LOGSTASH_PORT: 5000
     ports:
       - "8072:8072"
     networks:
