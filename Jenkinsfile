@@ -1,6 +1,8 @@
 pipeline {
     agent any
-
+    tools {
+        jdk 'Java21'
+    }
     environment {
         // Docker Hub credentials stored in Jenkins (username/password)
         DOCKERHUB_CREDENTIALS = credentials('2458a8bf-c1db-46c5-a39f-a6f5061da077')
