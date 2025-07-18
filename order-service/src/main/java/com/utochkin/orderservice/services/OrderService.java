@@ -6,13 +6,15 @@ import com.utochkin.orderservice.controllers.ShopController;
 import com.utochkin.orderservice.dto.AddressDto;
 import com.utochkin.orderservice.dto.OrderDto;
 import com.utochkin.orderservice.dto.OrderDtoForKafka;
-import com.utochkin.orderservice.dto.UserDto;
 import com.utochkin.orderservice.exceptions.*;
 import com.utochkin.orderservice.mappers.AddressMapper;
 import com.utochkin.orderservice.mappers.OrderMapper;
 import com.utochkin.orderservice.mappers.ProductInfoMapper;
 import com.utochkin.orderservice.mappers.UserMapper;
-import com.utochkin.orderservice.models.*;
+import com.utochkin.orderservice.models.Order;
+import com.utochkin.orderservice.models.ProductInfo;
+import com.utochkin.orderservice.models.Status;
+import com.utochkin.orderservice.models.User;
 import com.utochkin.orderservice.repositories.OrderRepository;
 import com.utochkin.orderservice.repositories.ProductInfoRepository;
 import com.utochkin.orderservice.request.AccountRequest;
@@ -31,8 +33,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
+
+import static com.utochkin.orderservice.models.Status.REFUNDED;
 
 
 @Service
@@ -49,6 +52,27 @@ public class OrderService {
     private final OrderMapper orderMapper;
     private final AddressMapper addressMapper;
     private final KafkaSenderService kafkaSenderService;
+
+    private void processPaymentResult(Order order, PaymentResponse paymentResponse) {
+        order.setOrderStatus(paymentResponse.getStatus());
+        order.setUpdatedAt(LocalDateTime.now());
+        order.setPaymentId(paymentResponse.getPaymentId());
+        Order savedOrder = orderRepository.save(order);
+
+        List<OrderRequest> orderRequests = savedOrder.getProductInfos().stream()
+                .map(productInfo -> new OrderRequest(productInfo.getArticleId(), productInfo.getQuantity()))
+                .toList();
+
+        OrderDtoForKafka dto = orderMapper.toDtoForKafka(
+                savedOrder,
+                userMapper.toDto(savedOrder.getUser()),
+                addressMapper.toDto(savedOrder.getAddress()),
+                orderRequests
+        );
+        kafkaSenderService.send(dto);
+
+        log.info("OrderService: отправлено событие {} для заказа {}", paymentResponse.getStatus(), savedOrder.getOrderUuid());
+    }
 
     @Transactional(readOnly = true)
     @CircuitBreaker(name = "circuitBreakerCheckOrder", fallbackMethod = "fallbackMethodCheckOrder")
@@ -69,32 +93,30 @@ public class OrderService {
     public OrderDto createOrder(User user, List<OrderRequest> orderRequests, AddressDto addressDto) {
         log.info("OrderService: начало создания заказа для user={} requests={}", user.getUsername(), orderRequests);
 
-        Address address = addressMapper.toEntity(addressDto);
-
         List<ProductInfo> listEntity = productInfoMapper.toListEntity(orderRequests);
         productInfoRepository.saveAll(listEntity);
 
-        Order order = new Order();
-        order.setOrderUuid(UUID.randomUUID());
-        order.setTotalAmount(shopController.getSumTotalPriceOrder(orderRequests));
-        order.setOrderStatus(Status.WAITING_FOR_PAYMENT);
-        order.setCreatedAt(LocalDateTime.now());
-        order.setUpdatedAt(null);
-        order.setAddress(address);
-        order.setUser(user);
-        order.setPaymentId(null);
-        order.setProductInfos(listEntity);
+        Order order = Order.builder()
+                .orderUuid(UUID.randomUUID())
+                .totalAmount(shopController.getSumTotalPriceOrder(orderRequests))
+                .orderStatus(Status.WAITING_FOR_PAYMENT)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(null)
+                .address(addressMapper.toEntity(addressDto))
+                .user(user)
+                .paymentId(null)
+                .productInfos(listEntity)
+                .build();
+
         Order savedOrder = orderRepository.save(order);
 
         listEntity.forEach(productInfo -> productInfo.setOrder(savedOrder));
 
         shopController.changeTotalQuantityProductsAfterCreateOrder(orderRequests);
 
-        UserDto userDto = userMapper.toDto(user);
-
         log.info("OrderService: заказ {} создан успешно", savedOrder.getOrderUuid());
 
-        return orderMapper.toDto(savedOrder, userDto, addressDto, orderRequests);
+        return orderMapper.toDto(savedOrder, userMapper.toDto(user), addressDto, orderRequests);
     }
 
     public OrderDto fallbackMethodCreateOrder(User user, List<OrderRequest> orderRequests, AddressDto addressDto, Throwable throwable) {
@@ -108,63 +130,23 @@ public class OrderService {
     public PaymentResponse paymentOrder(PaymentRequest paymentRequest) {
         log.info("OrderService: оплата заказа {}", paymentRequest.getOrderUuid());
 
-        Optional<Order> orderById = orderRepository.findByOrderUuid(paymentRequest.getOrderUuid());
-        if (orderById.isPresent()) {
-            Order order = orderById.get();
-            AddressDto addressDto = addressMapper.toDto(order.getAddress());
-            switch (order.getOrderStatus()) {
-                case SUCCESS -> throw new FailedOrderStatusException("Заказ уже оплачен!");
-                case REFUNDED -> throw new FailedOrderStatusException("Заказ отменен, необходимо создать новый заказ!");
-            }
+        Order order = orderRepository.findByOrderUuid(paymentRequest.getOrderUuid()).orElseThrow(OrderNotFoundException::new);
 
-            Double totalAmountById = orderRepository.findTotalAmountByOrderUuid(paymentRequest.getOrderUuid());
-            PaymentResponse paymentResponse = paymentController.paymentOrder(new AccountRequest(totalAmountById, paymentRequest.getCardNumber()));
-            switch (paymentResponse.getStatus()) {
-                case Status.SUCCESS -> {
-                    order.setOrderStatus(Status.SUCCESS);
-                    order.setUpdatedAt(LocalDateTime.now());
-                    order.setPaymentId(paymentResponse.getPaymentId());
-                    Order saveOrder = orderRepository.save(order);
-
-                    List<OrderRequest> orderRequests = order.getProductInfos()
-                            .stream()
-                            .map(productInfo -> new OrderRequest(
-                                    productInfo.getArticleId(),
-                                    productInfo.getQuantity()
-                            ))
-                            .toList();
-
-                    OrderDtoForKafka dtoForKafka = orderMapper.toDtoForKafka(saveOrder, userMapper.toDto(saveOrder.getUser()), addressDto, orderRequests);
-
-                    kafkaSenderService.send(dtoForKafka);
-                }
-                case Status.FAILED -> {
-                    order.setOrderStatus(Status.FAILED);
-                    order.setUpdatedAt(LocalDateTime.now());
-                    order.setPaymentId(paymentResponse.getPaymentId());
-                    Order saveOrder = orderRepository.save(order);
-
-                    List<OrderRequest> orderRequests = order.getProductInfos()
-                            .stream()
-                            .map(productInfo -> new OrderRequest(
-                                    productInfo.getArticleId(),
-                                    productInfo.getQuantity()
-                            ))
-                            .toList();
-
-                    OrderDtoForKafka dtoForKafka = orderMapper.toDtoForKafka(saveOrder, userMapper.toDto(saveOrder.getUser()), addressDto, orderRequests);
-
-                    kafkaSenderService.send(dtoForKafka);
-
-                    throw new FailedPayOrderException();
-                }
-            }
-            log.info("OrderService: статус оплаты {} для заказа {}", paymentResponse.getStatus(), paymentRequest.getOrderUuid());
-
-            return paymentResponse;
-        } else {
-            throw new OrderNotFoundException();
+        switch (order.getOrderStatus()) {
+            case SUCCESS -> throw new FailedOrderStatusException("Заказ уже оплачен!");
+            case REFUNDED -> throw new FailedOrderStatusException("Заказ отменен, необходимо создать новый заказ!");
         }
+
+        Double totalAmountById = orderRepository.findTotalAmountByOrderUuid(paymentRequest.getOrderUuid());
+        PaymentResponse paymentResponse = paymentController.paymentOrder(new AccountRequest(totalAmountById, paymentRequest.getCardNumber()));
+
+        processPaymentResult(order, paymentResponse);
+
+        if (paymentResponse.getStatus() == Status.FAILED) {
+            throw new FailedPayOrderException();
+        }
+
+        return paymentResponse;
     }
 
     public PaymentResponse fallbackMethodPayOrder(PaymentRequest paymentRequest, Throwable throwable) {
@@ -180,53 +162,48 @@ public class OrderService {
     public void refundedOrder(PaymentRequest paymentRequest) {
         log.info("OrderService: возврат заказа {}", paymentRequest.getOrderUuid());
 
-        Optional<Order> orderById = orderRepository.findByOrderUuid(paymentRequest.getOrderUuid());
-        if (orderById.isPresent()) {
-            Order order = orderById.get();
-            AddressDto addressDto = addressMapper.toDto(order.getAddress());
-            switch (order.getOrderStatus()) {
-                case WAITING_FOR_PAYMENT, FAILED, REFUNDED ->
-                        throw new FailedOrderStatusException("Заказ нельзя отменить, т.к. он не был оплачен!");
-            }
+        Order order = orderRepository.findByOrderUuid(paymentRequest.getOrderUuid()).orElseThrow(OrderNotFoundException::new);
 
-            Double totalAmountById = orderRepository.findTotalAmountByOrderUuid(paymentRequest.getOrderUuid());
-            PaymentResponse refundedOrder = paymentController.refundedOrder(new AccountRequest(totalAmountById, paymentRequest.getCardNumber()));
-            if (refundedOrder.getStatus().equals(Status.REFUNDED)) {
-                order.setOrderStatus(Status.REFUNDED);
-                order.setUpdatedAt(LocalDateTime.now());
-                order.setPaymentId(refundedOrder.getPaymentId());
+        switch (order.getOrderStatus()) {
+            case WAITING_FOR_PAYMENT, FAILED, REFUNDED ->
+                    throw new FailedOrderStatusException("Заказ нельзя отменить, т.к. он не был оплачен!");
+        }
 
-                List<ProductInfo> productInfos = order.getProductInfos();
+        Double totalAmountById = orderRepository.findTotalAmountByOrderUuid(paymentRequest.getOrderUuid());
+        PaymentResponse refundedOrder = paymentController.refundedOrder(new AccountRequest(totalAmountById, paymentRequest.getCardNumber()));
 
-                List<OrderRequest> orderRequests = productInfos.stream()
-                        .map(productInfo -> {
-                            OrderRequest orderRequest = new OrderRequest();
-                            orderRequest.setArticleId(productInfo.getArticleId());
-                            orderRequest.setQuantity(productInfo.getQuantity());
-                            return orderRequest;
-                        })
-                        .toList();
+        if (refundedOrder.getStatus() == REFUNDED) {
 
-                shopController.changeTotalQuantityProductsAfterRefundedOrder(orderRequests);
+            order.setOrderStatus(Status.REFUNDED);
+            order.setUpdatedAt(LocalDateTime.now());
+            order.setPaymentId(refundedOrder.getPaymentId());
 
-                order.setProductInfos(Collections.emptyList());
+            List<ProductInfo> productInfos = order.getProductInfos();
 
-                orderRepository.save(order);
+            List<OrderRequest> orderRequests = productInfos.stream()
+                    .map(productInfo -> {
+                        OrderRequest orderRequest = new OrderRequest();
+                        orderRequest.setArticleId(productInfo.getArticleId());
+                        orderRequest.setQuantity(productInfo.getQuantity());
+                        return orderRequest;
+                    })
+                    .toList();
 
-                List<Long> productIds = productInfos.stream().map(ProductInfo::getId).toList();
+            shopController.changeTotalQuantityProductsAfterRefundedOrder(orderRequests);
 
-                productInfoRepository.deleteAllById(productIds);
+            order.setProductInfos(Collections.emptyList());
 
-                Order saveOrder = orderRepository.save(order);
+            List<Long> productIds = productInfos.stream().map(ProductInfo::getId).toList();
 
-                OrderDtoForKafka dtoForKafka = orderMapper.toDtoForKafka(saveOrder, userMapper.toDto(saveOrder.getUser()), addressDto, orderRequests);
+            productInfoRepository.deleteAllById(productIds);
 
-                kafkaSenderService.send(dtoForKafka);
+            Order saveOrder = orderRepository.save(order);
 
-                log.info("OrderService: возврат выполнен {}", paymentRequest.getOrderUuid());
-            }
-        } else {
-            throw new OrderNotFoundException();
+            OrderDtoForKafka dtoForKafka = orderMapper.toDtoForKafka(saveOrder, userMapper.toDto(saveOrder.getUser()), addressMapper.toDto(order.getAddress()), orderRequests);
+
+            kafkaSenderService.send(dtoForKafka);
+
+            log.info("OrderService: возврат выполнен {}", paymentRequest.getOrderUuid());
         }
     }
 
@@ -251,9 +228,7 @@ public class OrderService {
                 throwable instanceof CardNumberNotFoundException ||
                 throwable instanceof FailedPayOrderException ||
                 throwable instanceof OrderNotFoundException) {
-            throw throwable instanceof RuntimeException
-                    ? (RuntimeException) throwable
-                    : new RuntimeException(throwable);
+            throw (RuntimeException) throwable;
         }
     }
 }

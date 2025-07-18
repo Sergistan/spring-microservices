@@ -36,17 +36,22 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final ProductMapper productMapper;
 
+    private List<Product> fetchProducts(List<OrderRequest> orderRequests) {
+        List<UUID> ids = orderRequests.stream()
+                .map(OrderRequest::getArticleId)
+                .toList();
+        return productRepository.findAllByArticleIds(ids);
+    }
+
     @Transactional(readOnly = true)
     public Boolean checkOrder(List<OrderRequest> orderRequests) {
         log.info("ProductService: проверка остатков для {}", orderRequests);
 
-        List<UUID> listUuids = orderRequests.stream().map(OrderRequest::getArticleId).toList();
-
-        List<Product> products = productRepository.findAllByArticleIds(listUuids);
+        List<Product> products = fetchProducts(orderRequests);
 
         Map<UUID, Integer> productQuantities = products.stream().collect(Collectors.toMap(Product::getArticleId, Product::getQuantity));
 
-        boolean allAvailable  = orderRequests.stream()
+        boolean allAvailable = orderRequests.stream()
                 .allMatch(orderRequest -> {
                     Integer availableQuantity = productQuantities.get(orderRequest.getArticleId());
                     return availableQuantity != null && availableQuantity >= orderRequest.getQuantity();
@@ -59,12 +64,10 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
-    public Double getSumTotalPriceOrder(List<OrderRequest> orderRequests){
+    public Double getSumTotalPriceOrder(List<OrderRequest> orderRequests) {
         log.info("ProductService: расчёт суммы для {}", orderRequests);
 
-        List<UUID> listUuids = orderRequests.stream().map(OrderRequest::getArticleId).toList();
-
-        List<Product> products = productRepository.findAllByArticleIds(listUuids);
+        List<Product> products = fetchProducts(orderRequests);
 
         Map<UUID, Double> productPrices = products.stream().collect(Collectors.toMap(Product::getArticleId, Product::getPrice));
 
@@ -89,9 +92,7 @@ public class ProductService {
     public void changeTotalQuantityProductsAfterCreateOrder(List<OrderRequest> orderRequests) {
         log.info("ProductService: уменьшаем остатки продуктов в бд после создания заказа {}", orderRequests);
 
-        List<UUID> listUuids = orderRequests.stream().map(OrderRequest::getArticleId).toList();
-
-        List<Product> products = productRepository.findAllByArticleIds(listUuids);
+        List<Product> products = fetchProducts(orderRequests);
 
         Map<UUID, Product> productMap = products.stream().collect(Collectors.toMap(Product::getArticleId, product -> product));
 
@@ -118,9 +119,7 @@ public class ProductService {
     public void changeTotalQuantityProductsAfterRefundedOrder(List<OrderRequest> orderRequests) {
         log.info("ProductService: восстанавливаем остатки продуктов в бд после возврата {}", orderRequests);
 
-        List<UUID> listUuids = orderRequests.stream().map(OrderRequest::getArticleId).toList();
-
-        List<Product> products = productRepository.findAllByArticleIds(listUuids);
+        List<Product> products = fetchProducts(orderRequests);
 
         Map<UUID, Product> productMap = products.stream().collect(Collectors.toMap(Product::getArticleId, product -> product));
 
@@ -159,8 +158,8 @@ public class ProductService {
 
     @Transactional
     @Caching(
-            put = { @CachePut(value = "product", key = "#result.articleId") },
-            evict = { @CacheEvict(value = "products", allEntries = true) }
+            put = {@CachePut(value = "product", key = "#result.articleId")},
+            evict = {@CacheEvict(value = "products", allEntries = true)}
     )
     public ProductDto addProduct(ProductDtoRequest productDtoRequest) {
         log.info("ProductService: добавление продукта {}", productDtoRequest);
@@ -174,8 +173,8 @@ public class ProductService {
     @CacheEvict(value = {"products", "product"}, allEntries = true)
     public void deleteProduct(UUID articleId) {
         log.info("ProductService: удаление продукта {}", articleId);
-        Optional <Product> productByArticleId = productRepository.findByArticleId(articleId);
-        if(productByArticleId.isPresent()){
+        Optional<Product> productByArticleId = productRepository.findByArticleId(articleId);
+        if (productByArticleId.isPresent()) {
             productRepository.deleteByArticleId(articleId);
         } else {
             throw new ProductNotFoundException("Not found this product!");
@@ -185,13 +184,13 @@ public class ProductService {
 
     @Transactional
     @Caching(
-            put = { @CachePut(value = "product", key = "#articleId") },
-            evict = { @CacheEvict(value = "products", allEntries = true) }
+            put = {@CachePut(value = "product", key = "#articleId")},
+            evict = {@CacheEvict(value = "products", allEntries = true)}
     )
     public ProductDto updateProduct(UUID articleId, ProductDtoRequest productDtoRequest) {
         log.info("ProductService: обновление продукта {} -> {}", articleId, productDtoRequest);
-        Optional <Product> productByArticleId = productRepository.findByArticleId(articleId);
-        if(productByArticleId.isPresent()){
+        Optional<Product> productByArticleId = productRepository.findByArticleId(articleId);
+        if (productByArticleId.isPresent()) {
             Product product = productByArticleId.get();
             product.setName(productDtoRequest.getName());
             product.setQuantity(productDtoRequest.getQuantity());

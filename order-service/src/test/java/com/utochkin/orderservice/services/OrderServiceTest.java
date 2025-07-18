@@ -311,7 +311,7 @@ public class OrderServiceTest {
                         ))
                 );
         then(productInfoRepository).should().deleteAllById(List.of(42L));
-        then(orderRepository).should(times(2)).save(order);
+        then(orderRepository).should(times(1)).save(order);
         then(kafkaSenderService).should().send(any(OrderDtoForKafka.class));
     }
 
