@@ -1,32 +1,26 @@
 pipeline {
     agent any
-
-    tools {
-        jdk 'Java21'
-    }
-
+    tools { jdk 'Java21' }
     environment {
         DOCKERHUB_NAMESPACE = 'sergistan'
     }
-
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
-
         stage('Build & Test') {
             steps {
                 script {
                     def services = [
-                      'eureka-server','config-server','getaway-server',
-                      'order-service','shop-service','payment-service',
-                      'notification-service','history-service'
+                        'eureka-server','config-server','getaway-server',
+                        'order-service','shop-service','payment-service',
+                        'notification-service','history-service'
                     ]
                     services.each { svc ->
                         powershell """
-                            Write-Host "=== Сборка и тестирование ${svc} ==="
+                            Write-Host "=== Собираем и тестируем ${svc} ==="
                             cd ${svc}
                             ..\\gradlew.bat clean build --no-daemon
                             cd ..
@@ -35,14 +29,13 @@ pipeline {
                 }
             }
         }
-
         stage('Build Docker Images') {
             steps {
                 script {
                     def services = [
-                      'eureka-server','config-server','getaway-server',
-                      'order-service','shop-service','payment-service',
-                      'notification-service','history-service'
+                        'eureka-server','config-server','getaway-server',
+                        'order-service','shop-service','payment-service',
+                        'notification-service','history-service'
                     ]
                     services.each { svc ->
                         powershell """
@@ -53,7 +46,6 @@ pipeline {
                 }
             }
         }
-
         stage('Push to Docker Hub') {
             steps {
                 withCredentials([usernamePassword(
@@ -63,38 +55,29 @@ pipeline {
                 )]) {
                     script {
                         def services = [
-                          'eureka-server','config-server','getaway-server',
-                          'order-service','shop-service','payment-service',
-                          'notification-service','history-service'
+                            'eureka-server','config-server','getaway-server',
+                            'order-service','shop-service','payment-service',
+                            'notification-service','history-service'
                         ]
                         services.each { svc ->
-                            powershell """
-                                Write-Host '=== Docker Hub login ==='
-                                # предварительно выходим, чтобы не было конфликтов
-                                docker logout 2>$null; Write-Host 'Logged out'
+                            powershell '''
+                                try { docker logout } catch {}
+                                Write-Host "Logging in to Docker Hub as $env:DH_USER"
+                                # подаём токен по stdin
+                                $env:DH_PASS | docker login --username $env:DH_USER --password-stdin
 
-                                # подаём пароль через stdin
-                                \$env:DH_PASS | docker login --username \$env:DH_USER --password-stdin
-
-                                Write-Host "=== Pushing ${svc}:${env.BUILD_NUMBER} ==="
-                                docker push ${DOCKERHUB_NAMESPACE}/${svc}:${env.BUILD_NUMBER}
-                            """
+                                Write-Host "=== Pushing ${svc}:${env:BUILD_NUMBER} ==="
+                                docker push ${DOCKERHUB_NAMESPACE}/${svc}:${env:BUILD_NUMBER}
+                            '''
                         }
                     }
                 }
             }
         }
     }
-
     post {
-        always {
-            cleanWs()    // очищаем workspace
-        }
-        success {
-            echo '✅ Сборка и публикация образов успешно завершены'
-        }
-        failure {
-            echo '❌ Что-то пошло не так, проверьте логи'
-        }
+        always { cleanWs() }
+        success { echo '✅ Сборка и публикация завершены' }
+        failure { echo '❌ Ошибка — смотрите логи' }
     }
 }
