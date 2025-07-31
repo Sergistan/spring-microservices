@@ -69,20 +69,23 @@ pipeline {
         stage('Push to Docker Hub') {
             steps {
                 script {
-                    docker.withRegistry('https://registry.hub.docker.com', '2458a8bf-c1db-46c5-a39f-a6f5061da077') {
+                    withCredentials([usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DH_USER',
+                        passwordVariable: 'DH_PASS'
+                    )]) {
                         def services = [
-                            'eureka-server',
-                            'config-server',
-                            'getaway-server',
-                            'order-service',
-                            'shop-service',
-                            'payment-service',
-                            'notification-service',
-                            'history-service'
+                            'eureka-server','config-server','getaway-server',
+                            'order-service','shop-service','payment-service',
+                            'notification-service','history-service'
                         ]
                         services.each { svc ->
                             powershell """
-                                Write-Host "=== Pushing ${svc}:${env.BUILD_NUMBER} to Docker Hub ==="
+                                Write-Host '=== Docker Hub login ==='
+                                docker logout || echo 'No previous login'
+                                docker login -u $env:DH_USER -p $env:DH_PASS
+
+                                Write-Host '=== Pushing ${svc}:${env.BUILD_NUMBER} ==='
                                 docker push ${DOCKERHUB_NAMESPACE}/${svc}:${env.BUILD_NUMBER}
                             """
                         }
