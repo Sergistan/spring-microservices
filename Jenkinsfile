@@ -20,16 +20,16 @@ pipeline {
             steps {
                 script {
                     def services = [
-                        'eureka-server', 'config-server', 'getaway-server',
-                        'order-service', 'shop-service', 'payment-service',
-                        'notification-service', 'history-service'
+                      'eureka-server','config-server','getaway-server',
+                      'order-service','shop-service','payment-service',
+                      'notification-service','history-service'
                     ]
                     services.each { svc ->
                         powershell """
-                            Write-Host "=== Собираем и тестируем ${svc} ==="
-                            Push-Location .\\${svc}
+                            Write-Host "=== Сборка и тестирование ${svc} ==="
+                            cd ${svc}
                             ..\\gradlew.bat clean build --no-daemon
-                            Pop-Location
+                            cd ..
                         """
                     }
                 }
@@ -40,9 +40,9 @@ pipeline {
             steps {
                 script {
                     def services = [
-                        'eureka-server', 'config-server', 'getaway-server',
-                        'order-service', 'shop-service', 'payment-service',
-                        'notification-service', 'history-service'
+                      'eureka-server','config-server','getaway-server',
+                      'order-service','shop-service','payment-service',
+                      'notification-service','history-service'
                     ]
                     services.each { svc ->
                         powershell """
@@ -56,24 +56,26 @@ pipeline {
 
         stage('Push to Docker Hub') {
             steps {
-                script {
-                    withCredentials([usernamePassword(
-                        credentialsId: 'dockerhub-creds',
-                        usernameVariable: 'DH_USER',
-                        passwordVariable: 'DH_PASS'
-                    )]) {
-                        powershell """
-                            Write-Host "=== Logging in to Docker Hub ==="
-                            docker logout || Write-Host 'No previous login'
-                            docker login -u $env:DH_USER --password-stdin <<< $env:DH_PASS
-                        """
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DH_USER',
+                    passwordVariable: 'DH_PASS'
+                )]) {
+                    script {
                         def services = [
-                            'eureka-server', 'config-server', 'getaway-server',
-                            'order-service', 'shop-service', 'payment-service',
-                            'notification-service', 'history-service'
+                          'eureka-server','config-server','getaway-server',
+                          'order-service','shop-service','payment-service',
+                          'notification-service','history-service'
                         ]
                         services.each { svc ->
                             powershell """
+                                Write-Host '=== Docker Hub login ==='
+                                # предварительно выходим, чтобы не было конфликтов
+                                docker logout 2>$null; Write-Host 'Logged out'
+
+                                # подаём пароль через stdin
+                                \$env:DH_PASS | docker login --username \$env:DH_USER --password-stdin
+
                                 Write-Host "=== Pushing ${svc}:${env.BUILD_NUMBER} ==="
                                 docker push ${DOCKERHUB_NAMESPACE}/${svc}:${env.BUILD_NUMBER}
                             """
@@ -86,7 +88,7 @@ pipeline {
 
     post {
         always {
-            cleanWs()
+            cleanWs()    // очищаем workspace
         }
         success {
             echo '✅ Сборка и публикация образов успешно завершены'
