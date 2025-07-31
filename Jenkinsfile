@@ -1,13 +1,12 @@
 pipeline {
     agent any
+
     tools {
         jdk 'Java21'
     }
+
     environment {
-        // Docker Hub credentials stored in Jenkins (username/password)
-        DOCKERHUB_CREDENTIALS = credentials('2458a8bf-c1db-46c5-a39f-a6f5061da077')
-        DOCKERHUB_NAMESPACE     = 'sergistan'
-        GRADLE_OPTS             = '-Dorg.gradle.daemon=false'
+        DOCKERHUB_NAMESPACE = 'sergistan'
     }
 
     stages {
@@ -20,16 +19,10 @@ pipeline {
         stage('Build & Test') {
             steps {
                 script {
-                    // Список всех модулей с Gradle‑тестами
                     def services = [
-                        'eureka-server',
-                        'config-server',
-                        'getaway-server',
-                        'order-service',
-                        'shop-service',
-                        'payment-service',
-                        'notification-service',
-                        'history-service'
+                        'eureka-server','config-server','getaway-server',
+                        'order-service','shop-service','payment-service',
+                        'notification-service','history-service'
                     ]
                     services.each { svc ->
                         powershell """
@@ -47,14 +40,9 @@ pipeline {
             steps {
                 script {
                     def services = [
-                        'eureka-server',
-                        'config-server',
-                        'getaway-server',
-                        'order-service',
-                        'shop-service',
-                        'payment-service',
-                        'notification-service',
-                        'history-service'
+                        'eureka-server','config-server','getaway-server',
+                        'order-service','shop-service','payment-service',
+                        'notification-service','history-service'
                     ]
                     services.each { svc ->
                         powershell """
@@ -82,7 +70,7 @@ pipeline {
                         services.each { svc ->
                             powershell """
                                 Write-Host '=== Docker Hub login ==='
-                                docker logout || echo 'No previous login'
+                                docker logout -ErrorAction SilentlyContinue; Write-Host 'Logged out if needed'
                                 docker login -u $env:DH_USER -p $env:DH_PASS
 
                                 Write-Host '=== Pushing ${svc}:${env.BUILD_NUMBER} ==='
@@ -96,11 +84,14 @@ pipeline {
     }
 
     post {
+        always {
+            cleanWs()
+        }
         success {
             echo '✅ Сборка и публикация образов успешно завершены'
         }
         failure {
-            echo '❌ Что‑то пошло не так, проверьте логи'
+            echo '❌ Что-то пошло не так, проверьте логи'
         }
     }
 }
