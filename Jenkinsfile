@@ -52,7 +52,7 @@ pipeline {
     stage('Push to Docker Hub') {
       steps {
         script {
-          docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-creds') {
+          docker.withRegistry('', 'dockerhub-creds') {
             def services = [
               'eureka-server','config-server','getaway-server',
               'order-service','shop-service','payment-service',
