@@ -52,7 +52,6 @@ pipeline {
     stage('Push to Docker Hub') {
       steps {
         script {
-          // 'dockerhub-creds' — это ID Jenkins-credentials (Username = DockerID, Password = Access token)
           docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-creds') {
             def services = [
               'eureka-server','config-server','getaway-server',
@@ -60,7 +59,6 @@ pipeline {
               'notification-service','history-service'
             ]
             services.each { svc ->
-              // На Windows-агенте sh отсутствует, поэтому пуш через PowerShell
               powershell "docker push ${DOCKERHUB_NAMESPACE}/${svc}:${env.BUILD_NUMBER}"
             }
           }
