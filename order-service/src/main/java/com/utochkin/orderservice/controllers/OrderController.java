@@ -1,6 +1,7 @@
 package com.utochkin.orderservice.controllers;
 
 import com.utochkin.orderservice.dto.OrderDto;
+import com.utochkin.orderservice.dto.OrderDtoForKafka;
 import com.utochkin.orderservice.models.ErrorResponse;
 import com.utochkin.orderservice.models.User;
 import com.utochkin.orderservice.request.CompositeRequest;
@@ -38,7 +39,7 @@ public class OrderController {
     @PostMapping("/create")
     @Operation(summary = "Создание заказа")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Заказ оплачен", content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrderDto.class))),
+            @ApiResponse(responseCode = "200", description = "Заказ оплачен", content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrderDtoForKafka.class))),
             @ApiResponse(responseCode = "201", description = "Заказ создан", content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrderDto.class))),
             @ApiResponse(responseCode = "400", description = "Плохой запрос", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "402", description = "Ошибка оплаты заказа", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
