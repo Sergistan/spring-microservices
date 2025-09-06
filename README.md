@@ -144,22 +144,22 @@
 <details>
 <summary>Описание полей в OrderDto</summary>
 
-| Поле | Тип | Описание |
-|------|-----|----------|
-| `orderUuid` | `UUID` (string) | Уникальный идентификатор заказа |
-| `totalAmount` | `integer` | Общая сумма заказа |
-| `orderStatus` | `string` | Статус заказа (`SUCCESS`, `PENDING`, `FAILED`) |
+| Поле | Тип                         | Описание |
+|------|-----------------------------|----------|
+| `orderUuid` | `UUID` (string)             | Уникальный идентификатор заказа |
+| `totalAmount` | `double`                    | Общая сумма заказа |
+| `orderStatus` | `string`                    | Статус заказа (`SUCCESS`, `PENDING`, `FAILED`) |
 | `createdAt` | `string (yyyy-MM-dd HH:mm)` | Дата и время создания заказа |
-| `city` | `string` | Город доставки |
-| `street` | `string` | Улица доставки |
-| `houseNumber` | `integer` | Номер дома |
-| `apartmentNumber` | `integer` | Номер квартиры (опционально) |
-| `username` | `string` | Логин пользователя |
-| `firstName` | `string` | Имя пользователя |
-| `lastName` | `string` | Фамилия пользователя |
-| `email` | `string` | Электронная почта пользователя |
-| `articleId` | `UUID` (string) | Идентификатор товара в заказе |
-| `quantity` | `integer` | Количество товара в заказе |
+| `city` | `string`                    | Город доставки |
+| `street` | `string`                    | Улица доставки |
+| `houseNumber` | `integer`                   | Номер дома |
+| `apartmentNumber` | `integer`                   | Номер квартиры (опционально) |
+| `username` | `string`                    | Логин пользователя |
+| `firstName` | `string`                    | Имя пользователя |
+| `lastName` | `string`                    | Фамилия пользователя |
+| `email` | `string`                    | Электронная почта пользователя |
+| `articleId` | `UUID` (string)             | Идентификатор товара в заказе |
+| `quantity` | `integer`                   | Количество товара в заказе |
 
 </details>
 
@@ -249,24 +249,24 @@
 <details>
 <summary>Описание полей в OrderDto</summary>
 
-| Поле | Тип | Описание                                       |
-|------|-----|------------------------------------------------|
-| `orderUuid` | `UUID` (string) | Уникальный идентификатор заказа                |
-| `totalAmount` | `integer` | Общая сумма заказа                             |
-| `orderStatus` | `string` | Статус заказа (`SUCCESS`, `PENDING`, `FAILED`) |
+| Поле | Тип                         | Описание                                       |
+|------|-----------------------------|------------------------------------------------|
+| `orderUuid` | `UUID` (string)             | Уникальный идентификатор заказа                |
+| `totalAmount` | `double`                    | Общая сумма заказа                             |
+| `orderStatus` | `string`                    | Статус заказа (`SUCCESS`, `PENDING`, `FAILED`) |
 | `createdAt` | `string (yyyy-MM-dd HH:mm)` | Дата и время создания заказа                   |
 | `updatedAt` | `string (yyyy-MM-dd HH:mm)` | Дата и время обновления заказа                 |
-| `city` | `string` | Город доставки                                 |
-| `street` | `string` | Улица доставки                                 |
-| `houseNumber` | `integer` | Номер дома                                     |
-| `apartmentNumber` | `integer` | Номер квартиры (опционально)                   |
-| `username` | `string` | Логин пользователя                             |
-| `firstName` | `string` | Имя пользователя                               |
-| `lastName` | `string` | Фамилия пользователя                           |
-| `email` | `string` | Электронная почта пользователя                 |
-| `articleId` | `UUID` (string) | Идентификатор товара в заказе                  |
-| `quantity` | `integer` | Количество товара в заказе                     |
-| `paymentId` | `UUID` (string) | Уникальный идентификатор оплаты заказа         |
+| `city` | `string`                    | Город доставки                                 |
+| `street` | `string`                    | Улица доставки                                 |
+| `houseNumber` | `integer`                   | Номер дома                                     |
+| `apartmentNumber` | `integer`                   | Номер квартиры (опционально)                   |
+| `username` | `string`                    | Логин пользователя                             |
+| `firstName` | `string`                    | Имя пользователя                               |
+| `lastName` | `string`                    | Фамилия пользователя                           |
+| `email` | `string`                    | Электронная почта пользователя                 |
+| `articleId` | `UUID` (string)             | Идентификатор товара в заказе                  |
+| `quantity` | `integer`                   | Количество товара в заказе                     |
+| `paymentId` | `UUID` (string)             | Уникальный идентификатор оплаты заказа         |
 
 </details>
 
