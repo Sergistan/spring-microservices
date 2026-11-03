@@ -17,6 +17,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.test.EmbeddedKafkaBroker;
 import org.springframework.kafka.test.context.EmbeddedKafka;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -30,6 +32,11 @@ import java.util.Objects;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 
@@ -61,6 +68,9 @@ class NotificationServiceApplicationTests {
     @MockitoBean
     private JavaMailSender mailSender;
 
+    @MockitoBean
+    private StringRedisTemplate redisTemplate;
+
     @Autowired
     private ObjectMapper mapper;
 
@@ -71,6 +81,10 @@ class NotificationServiceApplicationTests {
     @BeforeEach
     void configureTemplate() {
         kafkaTemplate.setDefaultTopic("topic-orders");
+
+        ValueOperations<String, String> valueOperations = mock(ValueOperations.class);
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).willReturn(true);
     }
 
     @Test
@@ -85,6 +99,7 @@ class NotificationServiceApplicationTests {
                 new AddressDto("Moscow", "Lenina", 1, 10),
                 new UserDto("alice", "Alice", "Smith", "alice@example.com"),
                 List.of(new OrderRequest(UUID.randomUUID(), 1)),
+                UUID.randomUUID(),
                 UUID.randomUUID()
         );
 
@@ -98,6 +113,33 @@ class NotificationServiceApplicationTests {
                             && Objects.requireNonNull(msg.getText()).contains("Ваш заказ № " + order.getOrderUuid())
             ));
         });
+    }
+
+    @Test
+    @DisplayName("Повторная публикация события (tryAcquire=false) не отправляет письмо повторно")
+    void kafkaPublish_duplicateEvent_skipsEmail() throws Exception {
+        ValueOperations<String, String> valueOperations = mock(ValueOperations.class);
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).willReturn(false);
+
+        OrderDtoForKafka order = new OrderDtoForKafka(
+                UUID.randomUUID(),
+                99.9,
+                Status.SUCCESS,
+                LocalDateTime.now().minusMinutes(5),
+                LocalDateTime.now(),
+                new AddressDto("Moscow", "Lenina", 1, 10),
+                new UserDto("alice", "Alice", "Smith", "alice@example.com"),
+                List.of(new OrderRequest(UUID.randomUUID(), 1)),
+                UUID.randomUUID(),
+                UUID.randomUUID()
+        );
+
+        kafkaTemplate.sendDefault(order);
+        kafkaTemplate.flush();
+
+        Awaitility.await().pollDelay(Duration.ofSeconds(2)).atMost(Duration.ofSeconds(4)).until(() -> true);
+        verify(mailSender, never()).send(any(SimpleMailMessage.class));
     }
 
 }

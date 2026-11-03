@@ -17,3 +17,6 @@ databaseChangeLog:
   - include:
       file: /tables/change_constraint_address.sql
       relativeToChangeLogFile: true
+  - include:
+      file: /tables/create_table_outbox.sql
+      relativeToChangeLogFile: true

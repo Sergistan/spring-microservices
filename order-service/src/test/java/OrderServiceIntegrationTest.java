@@ -4,7 +4,9 @@ import com.utochkin.orderservice.controllers.PaymentController;
 import com.utochkin.orderservice.controllers.ShopController;
 import com.utochkin.orderservice.dto.AddressDto;
 import com.utochkin.orderservice.models.Status;
+import com.utochkin.orderservice.repositories.OutboxRepository;
 import com.utochkin.orderservice.request.*;
+import com.utochkin.orderservice.services.OutboxRelay;
 import io.github.resilience4j.springboot3.circuitbreaker.autoconfigure.CircuitBreakerAutoConfiguration;
 import io.github.resilience4j.springboot3.retry.autoconfigure.RetryAutoConfiguration;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -52,7 +54,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
                 "spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1",
                 "spring.kafka.producer.key-serializer=org.apache.kafka.common.serialization.StringSerializer",
                 "spring.kafka.producer.value-serializer=org.springframework.kafka.support.serializer.JsonSerializer",
-                "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}"
+                "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}",
+                "outbox.relay.fixed-delay=3600000"
         }
 )
 @ActiveProfiles("test")
@@ -75,6 +78,12 @@ class OrderServiceIntegrationTest {
 
     @Autowired
     private KafkaTemplate<String, Object> kafkaTemplate;
+
+    @Autowired
+    private OutboxRelay outboxRelay;
+
+    @Autowired
+    private OutboxRepository outboxRepository;
 
     @MockitoBean
     private ShopController shopController;
@@ -137,8 +146,28 @@ class OrderServiceIntegrationTest {
                 .andExpect(jsonPath("$.orderStatus").value("WAITING_FOR_PAYMENT"));
     }
 
+    private record KafkaEntry(String key, String value) {
+    }
+
+    private List<KafkaEntry> readAllFromTopic() {
+        Map<String, Object> consumerProps = KafkaTestUtils.consumerProps(
+                UUID.randomUUID().toString(), "false", embeddedKafka
+        );
+        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+
+        try (Consumer<String, String> consumer =
+                     new DefaultKafkaConsumerFactory<String, String>(consumerProps).createConsumer()) {
+            embeddedKafka.consumeFromAnEmbeddedTopic(consumer, "topic-orders");
+            ConsumerRecords<String, String> records = KafkaTestUtils.getRecords(consumer);
+            List<KafkaEntry> entries = new ArrayList<>();
+            records.forEach(record -> entries.add(new KafkaEntry(record.key(), record.value())));
+            return entries;
+        }
+    }
+
     @Test
-    @DisplayName("Оплата заказа → 200 + SUCCESS + Kafka‑сообщение")
+    @DisplayName("Оплата заказа → 200 + SUCCESS; событие через outbox в Kafka с ключом orderUuid")
     void payOrder_andKafka() throws Exception {
         double total = 250.5;
         UUID orderUuid = createOrder(total);
@@ -156,29 +185,19 @@ class OrderServiceIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SUCCESS"));
 
-        kafkaTemplate.flush();
+        assertThat(outboxRepository.count()).isEqualTo(1);
+        assertThat(outboxRepository.findAll().getFirst().getOrderUuid()).isEqualTo(orderUuid);
 
-        Map<String, Object> consumerProps = KafkaTestUtils.consumerProps(
-                UUID.randomUUID().toString(), "false", embeddedKafka
-        );
-        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-                StringDeserializer.class);
-        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-                StringDeserializer.class);
+        outboxRelay.pollOnce();
 
-        try (org.apache.kafka.clients.consumer.Consumer<String, String> consumer =
-                     new DefaultKafkaConsumerFactory<String, String>(consumerProps)
-                             .createConsumer()) {
+        assertThat(outboxRepository.count()).isZero();
 
-            embeddedKafka.consumeFromAnEmbeddedTopic(consumer, "topic-orders");
-
-            ConsumerRecords<String, String> records = KafkaTestUtils.getRecords(consumer);
-            List<String> values = new ArrayList<>();
-            records.forEach(record -> values.add(record.value()));
-
-            assertThat(values)
-                    .anyMatch(v -> v.contains("\"orderStatus\":\"SUCCESS\""));
-        }
+        List<KafkaEntry> entries = readAllFromTopic();
+        assertThat(entries)
+                .anySatisfy(entry -> {
+                    assertThat(entry.key()).isEqualTo(orderUuid.toString());
+                    assertThat(entry.value()).contains("\"orderStatus\":\"SUCCESS\"");
+                });
     }
 
     @Test
@@ -237,20 +256,13 @@ class OrderServiceIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string("Заказ успешно отменен"));
 
-        kafkaTemplate.flush();
+        outboxRelay.pollOnce();
 
-        Map<String, Object> consumerProps = KafkaTestUtils.consumerProps(UUID.randomUUID().toString(), "false", embeddedKafka);
-        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-
-        try (Consumer<String, String> consumer = new DefaultKafkaConsumerFactory<String, String>(consumerProps).createConsumer()) {
-            embeddedKafka.consumeFromAnEmbeddedTopic(consumer, "topic-orders");
-
-            ConsumerRecords<String, String> records = KafkaTestUtils.getRecords(consumer);
-            List<String> values = new ArrayList<>();
-            records.forEach(record -> values.add(record.value()));
-
-            assertThat(values).anyMatch(v -> v.contains("\"orderStatus\":\"REFUNDED\""));
-        }
+        List<KafkaEntry> entries = readAllFromTopic();
+        assertThat(entries)
+                .anySatisfy(entry -> {
+                    assertThat(entry.key()).isEqualTo(orderUuid.toString());
+                    assertThat(entry.value()).contains("\"orderStatus\":\"REFUNDED\"");
+                });
     }
 }

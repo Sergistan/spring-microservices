@@ -44,4 +44,7 @@ public class OrderDtoForKafka implements Serializable {
 
     @Schema(description = "UUID оплаты заказа", example = "3f9edc4b-e4cf-4257-a485-72a147a01245f", type = "string", format = "uuid")
     private UUID paymentId;
+
+    @Schema(description = "Уникальный идентификатор события для дедупликации у консьюмеров", type = "string", format = "uuid")
+    private UUID eventId;
 }

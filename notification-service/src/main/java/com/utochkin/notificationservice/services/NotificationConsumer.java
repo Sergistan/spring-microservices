@@ -14,11 +14,35 @@ import java.util.stream.Collectors;
 public class NotificationConsumer {
 
     private final EmailService emailService;
+    private final RedisProcessedEventsStore processedEventsStore;
 
     @KafkaListener(topics = "topic-orders", groupId = "notification-group")
     public void onOrderEvent(OrderDtoForKafka orderDto) {
         log.info("NotificationConsumer: получено сообщение из Kafka: {}", orderDto);
 
+        if (orderDto.getEventId() == null) {
+            log.warn("NotificationConsumer: событие без eventId для заказа {} — обрабатываем без дедупликации", orderDto.getOrderUuid());
+            sendNotification(orderDto);
+            return;
+        }
+
+        if (!processedEventsStore.tryAcquire(orderDto.getEventId())) {
+            log.info("NotificationConsumer: событие {} для заказа {} уже обработано — пропускаем (дедупликация)",
+                    orderDto.getEventId(), orderDto.getOrderUuid());
+            return;
+        }
+
+        try {
+            sendNotification(orderDto);
+        } catch (Exception e) {
+            processedEventsStore.release(orderDto.getEventId());
+            log.warn("NotificationConsumer: не удалось отправить уведомление для события {} — ключ дедупликации освобождён для повторной обработки",
+                    orderDto.getEventId());
+            throw e;
+        }
+    }
+
+    private void sendNotification(OrderDtoForKafka orderDto) {
         String recipientEmail = orderDto.getUserDto().email();
         if (recipientEmail != null && !recipientEmail.isEmpty()) {
             String subject = "Номер заказа " + orderDto.getOrderUuid();

@@ -74,6 +74,7 @@ public class HistoryServiceApplicationTests {
                 new AddressDto("SPb", "Nevsky", 20, 5),
                 new UserDto("alice", "Alice", "White", "alice@example.com"),
                 List.of(new OrderRequest(UUID.randomUUID(), 3)),
+                UUID.randomUUID(),
                 UUID.randomUUID()
         );
 
@@ -84,6 +85,35 @@ public class HistoryServiceApplicationTests {
             assertThat(historyOpt).isPresent();
             assertThat(historyOpt.get().getOrders()).hasSize(1);
             assertThat(historyOpt.get().getOrders().getFirst().getOrderUuid()).isEqualTo(orderDto.getOrderUuid());
+        });
+    }
+
+    @Test
+    @DisplayName("Повторная доставка того же события (один eventId) не создаёт дубль в истории")
+    void duplicateEvent_shouldBeSkipped() {
+        UUID eventId = UUID.randomUUID();
+        OrderDtoForKafka orderDto = new OrderDtoForKafka(
+                UUID.randomUUID(),
+                500.0,
+                Status.SUCCESS,
+                LocalDateTime.now().minusHours(2),
+                LocalDateTime.now(),
+                new AddressDto("SPb", "Nevsky", 20, 5),
+                new UserDto("bob", "Bob", "Grey", "bob@example.com"),
+                List.of(new OrderRequest(UUID.randomUUID(), 3)),
+                UUID.randomUUID(),
+                eventId
+        );
+
+        kafkaTemplate.sendDefault(orderDto);
+        kafkaTemplate.sendDefault(orderDto);
+        kafkaTemplate.flush();
+
+        Awaitility.await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
+            Optional<OrderHistory> historyOpt = orderHistoryRepository.findByUsername("bob");
+            assertThat(historyOpt).isPresent();
+            assertThat(historyOpt.get().getOrders()).hasSize(1);
+            assertThat(historyOpt.get().getOrders().getFirst().getEventId()).isEqualTo(eventId);
         });
     }
 }

@@ -43,6 +43,7 @@ public class OrderHistoryRepositoryTest {
                 new AddressDto("Moscow", "Arbat", 12, 45),
                 new UserDto(username, "Alice", "Smith", "alice@example.com"),
                 List.of(new OrderRequest(UUID.randomUUID(), 2)),
+                UUID.randomUUID(),
                 UUID.randomUUID()
         );
 
@@ -81,6 +82,7 @@ public class OrderHistoryRepositoryTest {
                 new AddressDto("Moscow", "Tverskaya", 7, 2),
                 new UserDto(username, "Alice", "Smith", "alice@example.com"),
                 List.of(new OrderRequest(UUID.randomUUID(), 1)),
+                UUID.randomUUID(),
                 UUID.randomUUID()
         );
 

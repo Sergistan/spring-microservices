@@ -37,6 +37,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -75,7 +76,7 @@ public class OrderServiceTest {
     private AddressMapper addressMapper;
 
     @Mock
-    private KafkaSenderService kafkaSenderService;
+    private OutboxService outboxService;
 
     @Mock
     private TransactionTemplate transactionTemplate;
@@ -133,7 +134,7 @@ public class OrderServiceTest {
                         uuid, 100.0, Status.REFUNDED,
                         order.getCreatedAt(), LocalDateTime.now(),
                         addrDto, new UserDto("bob", "", "", ""),
-                        orderRequests, UUID.randomUUID()
+                        orderRequests, UUID.randomUUID(), UUID.randomUUID()
                 ));
 
         given(transactionTemplate.execute(any()))
@@ -141,6 +142,11 @@ public class OrderServiceTest {
                     TransactionCallback<?> callback = inv.getArgument(0);
                     return callback.doInTransaction(null);
                 });
+        doAnswer(inv -> {
+            Consumer<org.springframework.transaction.TransactionStatus> consumer = inv.getArgument(0);
+            consumer.accept(null);
+            return null;
+        }).when(transactionTemplate).executeWithoutResult(any());
     }
 
     @Test
@@ -175,7 +181,7 @@ public class OrderServiceTest {
 
         assertThat(actual).isEqualTo(expectedDto);
 
-        then(kafkaSenderService).should(never()).send(any());
+        then(outboxService).should(never()).saveToOutbox(any());
     }
 
     @Test
@@ -242,13 +248,13 @@ public class OrderServiceTest {
                 .willReturn(new OrderDtoForKafka(
                         uuid, 100.0, Status.SUCCESS,
                         order.getCreatedAt(), LocalDateTime.now(),
-                        addrDto, new UserDto("bob", "", "", ""), orderRequests, success.getPaymentId()
+                        addrDto, new UserDto("bob", "", "", ""), orderRequests, success.getPaymentId(), UUID.randomUUID()
                 ));
 
         PaymentResponse resp = orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"));
 
         assertThat(resp).isEqualTo(success);
-        then(kafkaSenderService).should().send(any(OrderDtoForKafka.class));
+        then(outboxService).should().saveToOutbox(any(OrderDtoForKafka.class));
     }
 
     @Test
@@ -267,13 +273,13 @@ public class OrderServiceTest {
                 .willReturn(new OrderDtoForKafka(
                         uuid, 100.0, Status.FAILED,
                         order.getCreatedAt(), LocalDateTime.now(),
-                        addrDto, new UserDto("bob", "", "", ""), orderRequests, failed.getPaymentId()
+                        addrDto, new UserDto("bob", "", "", ""), orderRequests, failed.getPaymentId(), UUID.randomUUID()
                 ));
 
         assertThrows(FailedPayOrderException.class, () ->
                 orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"))
         );
-        then(kafkaSenderService).should().send(any(OrderDtoForKafka.class));
+        then(outboxService).should().saveToOutbox(any(OrderDtoForKafka.class));
     }
 
     @Test
@@ -290,7 +296,7 @@ public class OrderServiceTest {
         assertThat(ex.getMessage()).isEqualTo("Заказ уже оплачен!");
 
         then(paymentController).should(never()).paymentOrder(any());
-        then(kafkaSenderService).should(never()).send(any());
+        then(outboxService).should(never()).saveToOutbox(any());
     }
 
     @Test
@@ -308,7 +314,7 @@ public class OrderServiceTest {
                 .willReturn(new OrderDtoForKafka(
                         uuid, 100.0, Status.SUCCESS,
                         order.getCreatedAt(), LocalDateTime.now(),
-                        addrDto, new UserDto("bob", "", "", ""), orderRequests, success.getPaymentId()
+                        addrDto, new UserDto("bob", "", "", ""), orderRequests, success.getPaymentId(), UUID.randomUUID()
                 ));
 
         PaymentResponse resp = orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"));
@@ -344,7 +350,7 @@ public class OrderServiceTest {
         then(orderRepository).should(never()).transitionStatus(any(), anyList(), any());
         then(shopController).should(never()).changeTotalQuantityProductsAfterRefundedOrder(anyList());
         then(productInfoRepository).should(never()).deleteAllById(anyList());
-        then(kafkaSenderService).should(never()).send(any());
+        then(outboxService).should(never()).saveToOutbox(any());
     }
 
     @Test
@@ -369,7 +375,7 @@ public class OrderServiceTest {
                 );
         then(productInfoRepository).should().deleteAllById(List.of(42L));
         then(orderRepository).should(times(1)).save(order);
-        then(kafkaSenderService).should().send(any(OrderDtoForKafka.class));
+        then(outboxService).should().saveToOutbox(any(OrderDtoForKafka.class));
     }
 
     @Test
@@ -386,7 +392,7 @@ public class OrderServiceTest {
         assertThat(ex.getMessage()).isEqualTo("Заказ нельзя отменить, т.к. он не был оплачен!");
 
         then(paymentController).should(never()).refundedOrder(any());
-        then(kafkaSenderService).should(never()).send(any());
+        then(outboxService).should(never()).saveToOutbox(any());
     }
 
     @Test
@@ -405,6 +411,6 @@ public class OrderServiceTest {
         then(shopController).should(never()).changeTotalQuantityProductsAfterRefundedOrder(anyList());
         then(productInfoRepository).should(never()).deleteAllById(anyList());
         then(orderRepository).should(never()).save(order);
-        then(kafkaSenderService).should(never()).send(any());
+        then(outboxService).should(never()).saveToOutbox(any());
     }
 }

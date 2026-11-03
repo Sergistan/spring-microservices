@@ -29,6 +29,7 @@ ext {
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-mail'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation group: 'org.springframework.boot', name: 'spring-boot-starter-security', version: '3.3.5'
     implementation group: 'org.springframework.boot', name: 'spring-boot-starter-oauth2-client', version: '3.3.5'
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'

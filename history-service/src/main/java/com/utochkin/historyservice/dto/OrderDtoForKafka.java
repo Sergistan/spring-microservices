@@ -43,4 +43,7 @@ public class OrderDtoForKafka implements Serializable {
 
     @Field(targetType = FieldType.STRING)
     private UUID paymentId;
+
+    @Field(targetType = FieldType.STRING)
+    private UUID eventId;
 }

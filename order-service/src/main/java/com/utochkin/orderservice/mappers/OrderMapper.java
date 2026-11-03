@@ -21,5 +21,6 @@ public interface OrderMapper {
     @Mapping(target = "userDto", expression = "java(userDto)")
     @Mapping(target = "addressDto", expression = "java(addressDto)")
     @Mapping(target = "orderRequests", expression = "java(orderRequests)")
+    @Mapping(target = "eventId", ignore = true)
     OrderDtoForKafka toDtoForKafka(Order order, UserDto userDto, AddressDto addressDto, List<OrderRequest> orderRequests);
 }

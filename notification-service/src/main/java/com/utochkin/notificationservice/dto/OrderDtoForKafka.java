@@ -40,4 +40,6 @@ public class OrderDtoForKafka implements Serializable {
     private List<OrderRequest> orderRequests;
 
     private UUID paymentId;
+
+    private UUID eventId;
 }

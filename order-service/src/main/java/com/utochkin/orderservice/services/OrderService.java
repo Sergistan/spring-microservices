@@ -55,11 +55,11 @@ public class OrderService {
     private final UserMapper userMapper;
     private final OrderMapper orderMapper;
     private final AddressMapper addressMapper;
-    private final KafkaSenderService kafkaSenderService;
+    private final OutboxService outboxService;
     private final TransactionTemplate transactionTemplate;
 
-    private OrderDtoForKafka finalizePaymentResult(UUID orderUuid, PaymentResponse paymentResponse) {
-        return transactionTemplate.execute(status -> {
+    private void finalizePaymentResult(UUID orderUuid, PaymentResponse paymentResponse) {
+        transactionTemplate.executeWithoutResult(status -> {
             Order order = orderRepository.findByOrderUuid(orderUuid).orElseThrow(OrderNotFoundException::new);
             order.setOrderStatus(paymentResponse.getStatus());
             order.setUpdatedAt(LocalDateTime.now());
@@ -70,13 +70,15 @@ public class OrderService {
                     .map(productInfo -> new OrderRequest(productInfo.getArticleId(), productInfo.getQuantity()))
                     .toList();
 
-            return orderMapper.toDtoForKafka(
+            OrderDtoForKafka dto = orderMapper.toDtoForKafka(
                     savedOrder,
                     userMapper.toDto(savedOrder.getUser()),
                     addressMapper.toDto(savedOrder.getAddress()),
                     orderRequests
             );
+            outboxService.saveToOutbox(dto);
         });
+        log.info("OrderService: заказ {} переведён в {}, событие зафиксировано в outbox", orderUuid, paymentResponse.getStatus());
     }
 
     @Transactional(readOnly = true)
@@ -151,10 +153,7 @@ public class OrderService {
         PaymentResponse paymentResponse = paymentController.paymentOrder(new AccountRequest(
                 paymentRequest.getOrderUuid(), totalAmountById, paymentRequest.getCardNumber()));
 
-        OrderDtoForKafka dto = finalizePaymentResult(paymentRequest.getOrderUuid(), paymentResponse);
-        kafkaSenderService.send(dto);
-
-        log.info("OrderService: отправлено событие {} для заказа {}", paymentResponse.getStatus(), paymentRequest.getOrderUuid());
+        finalizePaymentResult(paymentRequest.getOrderUuid(), paymentResponse);
 
         if (paymentResponse.getStatus() == Status.FAILED) {
             throw new FailedPayOrderException();
@@ -194,7 +193,7 @@ public class OrderService {
 
         if (refundedOrder.getStatus() == REFUNDED) {
 
-            OrderDtoForKafka dtoForKafka = transactionTemplate.execute(status -> {
+            transactionTemplate.executeWithoutResult(status -> {
                 Order fresh = orderRepository.findByOrderUuid(paymentRequest.getOrderUuid()).orElseThrow(OrderNotFoundException::new);
 
                 fresh.setOrderStatus(Status.REFUNDED);
@@ -216,12 +215,11 @@ public class OrderService {
 
                 Order savedOrder = orderRepository.save(fresh);
 
-                return orderMapper.toDtoForKafka(savedOrder, userMapper.toDto(savedOrder.getUser()), addressMapper.toDto(fresh.getAddress()), orderRequests);
+                OrderDtoForKafka dtoForKafka = orderMapper.toDtoForKafka(savedOrder, userMapper.toDto(savedOrder.getUser()), addressMapper.toDto(fresh.getAddress()), orderRequests);
+                outboxService.saveToOutbox(dtoForKafka);
             });
 
-            kafkaSenderService.send(dtoForKafka);
-
-            log.info("OrderService: возврат выполнен {}", paymentRequest.getOrderUuid());
+            log.info("OrderService: возврат выполнен {}, событие зафиксировано в outbox", paymentRequest.getOrderUuid());
         }
     }
 
