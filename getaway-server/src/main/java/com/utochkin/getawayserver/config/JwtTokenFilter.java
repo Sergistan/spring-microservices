@@ -145,11 +145,11 @@ public class JwtTokenFilter implements GlobalFilter, Ordered {
         private Claims parseJwtToken(String token) throws Exception {
         PublicKey key = readRsaPublicKey(publicKey);
 
-        return Jwts.parserBuilder()
-                .setSigningKey(key)
+        return Jwts.parser()
+                .verifyWith(key)
                 .build()
-                .parseClaimsJws(token)
-                .getBody();
+                .parseSignedClaims(token)
+                .getPayload();
     }
 
     private static PublicKey readRsaPublicKey(String pemEncodedKey) throws Exception {

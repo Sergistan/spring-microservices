@@ -1,5 +1,3 @@
-version: '3.8'
-
 networks:
   app-network:
     driver: bridge
@@ -48,6 +46,12 @@ services:
       - app-network
     ports:
       - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U keycloak -d keycloak" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
   keycloak:
     container_name: keycloak
@@ -78,6 +82,15 @@ services:
       - app-network
     volumes:
       - keycloak-data:/opt/keycloak/data
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -sf http://localhost:8080/realms/microservices-realm >/dev/null || exit 1" ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   postgres-order:
     image: postgres:15
@@ -93,6 +106,12 @@ services:
       - app-network
     ports:
       - "5433:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d OrderServiceDB" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
   postgres-shop:
     image: postgres:15
@@ -108,6 +127,12 @@ services:
       - app-network
     ports:
       - "5434:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d ShopServiceDB" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
   postgres-payment:
     image: postgres:15
@@ -123,6 +148,12 @@ services:
       - app-network
     ports:
       - "5435:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d PaymentServiceDB" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
   pgadmin:
     image: dpage/pgadmin4
@@ -179,6 +210,12 @@ services:
       - zookeeper
     volumes:
       - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: [ "CMD-SHELL", "kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1" ]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
 
   kafdrop:
     image: obsidiandynamics/kafdrop:latest
@@ -205,6 +242,11 @@ services:
       - "6379:6379"
     volumes:
       - cache:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   mongo:
     image: mongo:6.0.21
@@ -273,8 +315,14 @@ services:
     networks:
       - app-network
     depends_on:
-        config-server:
-          condition: service_healthy
+      config-server:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:8761/actuator/health" ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
 
   getaway-server:
     build: ./getaway-server
@@ -283,8 +331,6 @@ services:
     environment:
       TZ: Europe/Moscow
       MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
-      SPRING_SLEUTH_SAMPLER_PROBABILITY: 0.1
-      SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED: false
       LOGGING_LOGSTASH_HOST: logstash
       LOGGING_LOGSTASH_PORT: 5000
     ports:
@@ -292,12 +338,18 @@ services:
     networks:
       - app-network
     depends_on:
-      - config-server
-      - eureka-server
-      - keycloak
-      - logstash
-      - elasticsearch
-      - zipkin
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      logstash:
+        condition: service_started
+      elasticsearch:
+        condition: service_started
+      zipkin:
+        condition: service_started
 
   order-service:
     build: ./order-service
@@ -311,22 +363,24 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-order:5432/OrderServiceDB
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: 1234
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       TZ: Europe/Moscow
       MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
-      SPRING_SLEUTH_SAMPLER_PROBABILITY: 0.1
-      SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED: false
     depends_on:
-      - keycloak
-      - redis
-      - postgres-order
-      - config-server
-      - getaway-server
-      - kafka
-      - zipkin
-      - logstash
-      - elasticsearch
+      keycloak:
+        condition: service_healthy
+      postgres-order:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      zipkin:
+        condition: service_started
+      logstash:
+        condition: service_started
+      elasticsearch:
+        condition: service_started
 
   shop-service:
     build: ./shop-service
@@ -340,21 +394,25 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-shop:5432/ShopServiceDB
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: 1234
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
       TZ: Europe/Moscow
       MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
-      SPRING_SLEUTH_SAMPLER_PROBABILITY: 0.1
-      SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED: false
     depends_on:
-      - keycloak
-      - redis
-      - postgres-shop
-      - config-server
-      - getaway-server
-      - order-service
-      - zipkin
-      - logstash
-      - elasticsearch
+      keycloak:
+        condition: service_healthy
+      postgres-shop:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      getaway-server:
+        condition: service_started
+      zipkin:
+        condition: service_started
+      logstash:
+        condition: service_started
+      elasticsearch:
+        condition: service_started
 
   payment-service:
     build: ./payment-service
@@ -368,21 +426,23 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-payment:5432/PaymentServiceDB
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: 1234
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
       TZ: Europe/Moscow
       MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
-      SPRING_SLEUTH_SAMPLER_PROBABILITY: 0.1
-      SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED: false
     depends_on:
-      - keycloak
-      - redis
-      - postgres-payment
-      - config-server
-      - getaway-server
-      - order-service
-      - zipkin
-      - logstash
-      - elasticsearch
+      keycloak:
+        condition: service_healthy
+      postgres-payment:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      getaway-server:
+        condition: service_started
+      zipkin:
+        condition: service_started
+      logstash:
+        condition: service_started
+      elasticsearch:
+        condition: service_started
 
   notification-service:
     build: ./notification-service
@@ -397,17 +457,23 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       TZ: Europe/Moscow
       MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
-      SPRING_SLEUTH_SAMPLER_PROBABILITY: 0.1
-      SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED: false
     depends_on:
-      - keycloak
-      - config-server
-      - getaway-server
-      - kafka
-      - redis
-      - zipkin
-      - logstash
-      - elasticsearch
+      keycloak:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      getaway-server:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      zipkin:
+        condition: service_started
+      logstash:
+        condition: service_started
+      elasticsearch:
+        condition: service_started
 
   history-service:
     build: ./history-service
@@ -421,18 +487,25 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       TZ: Europe/Moscow
       MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
-      SPRING_SLEUTH_SAMPLER_PROBABILITY: 0.1
-      SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED: false
     depends_on:
-      - keycloak
-      - config-server
-      - getaway-server
-      - eureka-server
-      - kafka
-      - mongo
-      - zipkin
-      - logstash
-      - elasticsearch
+      keycloak:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      getaway-server:
+        condition: service_started
+      eureka-server:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      zipkin:
+        condition: service_started
+      logstash:
+        condition: service_started
+      elasticsearch:
+        condition: service_started
     restart: always
 
   zipkin:

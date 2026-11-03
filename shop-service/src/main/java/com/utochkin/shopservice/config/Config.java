@@ -31,6 +31,7 @@ public class Config {
                 )
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**", "/favicon.ico", "/actuator/prometheus").permitAll()
+                        .requestMatchers("/actuator/health/**").permitAll()
                         .requestMatchers("/shop/api/v1/addProduct/**").hasRole("ADMIN")
                         .requestMatchers("/shop/api/v1/deleteProduct/**").hasRole("ADMIN")
                         .requestMatchers("/shop/api/v1/updateProduct/**").hasRole("ADMIN")
