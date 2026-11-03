@@ -42,4 +42,10 @@ public class ExceptionControllerAdvice {
     public ErrorResponse handlerCardNumberNotFoundException(CardNumberNotFoundException cardNumberNotFoundException) {
         return new ErrorResponse(cardNumberNotFoundException.getMessage());
     }
+
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(ProductUnavailableException.class)
+    public ErrorResponse handlerProductUnavailableException(ProductUnavailableException productUnavailableException) {
+        return new ErrorResponse(productUnavailableException.getMessage());
+    }
 }

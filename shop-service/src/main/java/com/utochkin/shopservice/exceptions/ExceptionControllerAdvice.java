@@ -13,4 +13,10 @@ public class ExceptionControllerAdvice {
     public ErrorResponse handlerProductNotFoundException(ProductNotFoundException productNotFoundException) {
         return new ErrorResponse(productNotFoundException.getMessage());
     }
+
+    @ResponseStatus(HttpStatus.CONFLICT)
+    @ExceptionHandler(InsufficientStockException.class)
+    public ErrorResponse handlerInsufficientStockException(InsufficientStockException insufficientStockException) {
+        return new ErrorResponse(insufficientStockException.getMessage());
+    }
 }

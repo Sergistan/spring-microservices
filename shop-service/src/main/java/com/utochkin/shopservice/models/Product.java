@@ -25,7 +25,7 @@ public class Product implements Serializable {
     private Long id;
 
     @Column(name = "article_id", nullable = false, columnDefinition = "UUID")
-    @NotEmpty
+    @NotNull
     private UUID articleId;
 
     @Column(name = "name")
@@ -33,6 +33,7 @@ public class Product implements Serializable {
     private String name;
 
     @Column(name = "quantity")
+    @NotNull
     @Positive
     private Integer quantity;
 

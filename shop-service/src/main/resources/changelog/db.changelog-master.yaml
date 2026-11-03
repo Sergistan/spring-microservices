@@ -11,3 +11,6 @@ databaseChangeLog:
   - include:
       file: /tables/change_constraint_products_quantity.sql
       relativeToChangeLogFile: true
+  - include:
+      file: /tables/create_table_stock_operations.sql
+      relativeToChangeLogFile: true

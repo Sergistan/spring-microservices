@@ -28,7 +28,7 @@ public class Order implements Serializable {
     private Long id;
 
     @Column(name = "order_uuid", unique = true)
-    @NotEmpty
+    @NotNull
     private UUID orderUuid;
 
     @Column(name = "total_amount")

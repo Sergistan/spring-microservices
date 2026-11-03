@@ -21,11 +21,13 @@ import com.utochkin.orderservice.request.AccountRequest;
 import com.utochkin.orderservice.request.OrderRequest;
 import com.utochkin.orderservice.request.PaymentRequest;
 import com.utochkin.orderservice.request.PaymentResponse;
+import com.utochkin.orderservice.request.StockChangeRequest;
 import feign.FeignException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -94,39 +96,54 @@ public class OrderService {
         throw new ServiceUnavailableException("Сервис временно недоступен, пожалуйста, повторите попытку позже");
     }
 
-    @Transactional
     @CircuitBreaker(name = "circuitBreakerCreateOrder", fallbackMethod = "fallbackMethodCreateOrder")
     @Retry(name = "retryCreateOrder", fallbackMethod = "fallbackMethodCreateOrder")
-    public OrderDto createOrder(User user, List<OrderRequest> orderRequests, AddressDto addressDto) {
-        log.info("OrderService: начало создания заказа для user={} requests={}", user.getUsername(), orderRequests);
+    public OrderDto createOrder(User user, UUID orderUuid, List<OrderRequest> orderRequests, AddressDto addressDto) {
+        log.info("OrderService: начало создания заказа {} для user={} requests={}", orderUuid, user.getUsername(), orderRequests);
 
-        List<ProductInfo> listEntity = productInfoMapper.toListEntity(orderRequests);
-        productInfoRepository.saveAll(listEntity);
+        try {
+            return transactionTemplate.execute(status -> {
+                Order order = Order.builder()
+                        .orderUuid(orderUuid)
+                        .totalAmount(shopController.getSumTotalPriceOrder(orderRequests))
+                        .orderStatus(Status.WAITING_FOR_PAYMENT)
+                        .createdAt(LocalDateTime.now())
+                        .updatedAt(null)
+                        .address(addressMapper.toEntity(addressDto))
+                        .user(user)
+                        .paymentId(null)
+                        .build();
 
-        Order order = Order.builder()
-                .orderUuid(UUID.randomUUID())
-                .totalAmount(shopController.getSumTotalPriceOrder(orderRequests))
-                .orderStatus(Status.WAITING_FOR_PAYMENT)
-                .createdAt(LocalDateTime.now())
-                .updatedAt(null)
-                .address(addressMapper.toEntity(addressDto))
-                .user(user)
-                .paymentId(null)
-                .productInfos(listEntity)
-                .build();
+                Order savedOrder = orderRepository.saveAndFlush(order);
 
-        Order savedOrder = orderRepository.save(order);
+                List<ProductInfo> listEntity = productInfoMapper.toListEntity(orderRequests);
+                listEntity.forEach(productInfo -> productInfo.setOrder(savedOrder));
+                productInfoRepository.saveAll(listEntity);
 
-        listEntity.forEach(productInfo -> productInfo.setOrder(savedOrder));
+                shopController.changeTotalQuantityProductsAfterCreateOrder(
+                        new StockChangeRequest(orderUuid, orderRequests));
 
-        shopController.changeTotalQuantityProductsAfterCreateOrder(orderRequests);
+                log.info("OrderService: заказ {} создан успешно", orderUuid);
 
-        log.info("OrderService: заказ {} создан успешно", savedOrder.getOrderUuid());
-
-        return orderMapper.toDto(savedOrder, userMapper.toDto(user), addressDto, orderRequests);
+                return orderMapper.toDto(savedOrder, userMapper.toDto(user), addressDto, orderRequests);
+            });
+        } catch (DataIntegrityViolationException e) {
+            Order existing = orderRepository.findByOrderUuid(orderUuid).orElseThrow(() -> e);
+            log.info("OrderService: заказ {} уже создан предыдущей попыткой — идемпотентный повтор", orderUuid);
+            return orderMapper.toDto(existing, userMapper.toDto(user), addressDto, orderRequests);
+        }
     }
 
-    public OrderDto fallbackMethodCreateOrder(User user, List<OrderRequest> orderRequests, AddressDto addressDto, Throwable throwable) {
+    public void fallbackMethodCreateOrder(User user, UUID orderUuid, List<OrderRequest> orderRequests, AddressDto addressDto, Throwable throwable) {
+        if (throwable instanceof FeignException fe) {
+            if (fe.status() == HttpStatus.CONFLICT.value() || fe.status() == HttpStatus.NOT_FOUND.value()) {
+                log.warn("OrderService: товар недоступен или недостаточен при создании заказа {} ({})", orderUuid, fe.status());
+                throw new ProductUnavailableException();
+            }
+        }
+        if (throwable instanceof ProductUnavailableException) {
+            throw (RuntimeException) throwable;
+        }
         log.error("Fallback для createOrder сработал из-за: {}", throwable.getMessage());
         throw new ServiceUnavailableException("Сервис временно недоступен, пожалуйста, повторите попытку позже");
     }
@@ -206,7 +223,8 @@ public class OrderService {
                         .map(productInfo -> new OrderRequest(productInfo.getArticleId(), productInfo.getQuantity()))
                         .toList();
 
-                shopController.changeTotalQuantityProductsAfterRefundedOrder(orderRequests);
+                shopController.changeTotalQuantityProductsAfterRefundedOrder(
+                        new StockChangeRequest(paymentRequest.getOrderUuid(), orderRequests));
 
                 fresh.setProductInfos(Collections.emptyList());
 

@@ -1,6 +1,6 @@
 package com.utochkin.shopservice.requests;
 
-import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -12,9 +12,10 @@ import java.util.UUID;
 @AllArgsConstructor
 @NoArgsConstructor
 public class OrderRequest {
-    @NotEmpty
+    @NotNull
     private UUID articleId;
 
+    @NotNull
     @Positive
     private Integer quantity;
 

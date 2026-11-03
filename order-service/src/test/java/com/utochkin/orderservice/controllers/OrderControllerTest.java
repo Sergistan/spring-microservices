@@ -78,7 +78,7 @@ public class OrderControllerTest {
                 UUID.randomUUID(), 300.0, /* status */ null, /*createdAt*/null,
                 address, /*userDto*/null, requests
         );
-        given(orderService.createOrder(eq(createdUser), eq(requests), eq(address)))
+        given(orderService.createOrder(eq(createdUser), any(UUID.class), eq(requests), eq(address)))
                 .willReturn(returned);
 
         mvc.perform(post("/order/api/v1/create")

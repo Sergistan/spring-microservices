@@ -1,6 +1,7 @@
 package com.utochkin.orderservice.controllers;
 
 import com.utochkin.orderservice.request.OrderRequest;
+import com.utochkin.orderservice.request.StockChangeRequest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -56,29 +57,33 @@ public class ShopControllerTest {
     }
 
     @Test
-    @DisplayName("changeTotalQuantityProductsAfterCreateOrder вызывается с правильным списком")
+    @DisplayName("changeTotalQuantityProductsAfterCreateOrder вызывается с ключом заказа и списком позиций")
     void changeTotalQuantityProductsAfterCreateOrder_VerifyInvocation() {
         OrderRequest req = new OrderRequest(UUID.randomUUID(), 1);
-        List<OrderRequest> requests = List.of(req);
+        UUID orderUuid = UUID.randomUUID();
+        StockChangeRequest request = new StockChangeRequest(orderUuid, List.of(req));
 
-        shopController.changeTotalQuantityProductsAfterCreateOrder(requests);
+        shopController.changeTotalQuantityProductsAfterCreateOrder(request);
 
-        ArgumentCaptor<List<OrderRequest>> captor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<StockChangeRequest> captor = ArgumentCaptor.forClass(StockChangeRequest.class);
         verify(shopController).changeTotalQuantityProductsAfterCreateOrder(captor.capture());
-        assertThat(captor.getValue()).containsExactly(req);
+        assertThat(captor.getValue().getOrderUuid()).isEqualTo(orderUuid);
+        assertThat(captor.getValue().getOrderRequests()).containsExactly(req);
     }
 
     @Test
-    @DisplayName("changeTotalQuantityProductsAfterRefundedOrder вызывается с правильным списком")
+    @DisplayName("changeTotalQuantityProductsAfterRefundedOrder вызывается с ключом заказа и списком позиций")
     void changeTotalQuantityProductsAfterRefundedOrder_VerifyInvocation() {
         OrderRequest req = new OrderRequest(UUID.randomUUID(), 4);
-        List<OrderRequest> requests = List.of(req);
+        UUID orderUuid = UUID.randomUUID();
+        StockChangeRequest request = new StockChangeRequest(orderUuid, List.of(req));
 
-        shopController.changeTotalQuantityProductsAfterRefundedOrder(requests);
+        shopController.changeTotalQuantityProductsAfterRefundedOrder(request);
 
-        ArgumentCaptor<List<OrderRequest>> captor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<StockChangeRequest> captor = ArgumentCaptor.forClass(StockChangeRequest.class);
         verify(shopController).changeTotalQuantityProductsAfterRefundedOrder(captor.capture());
-        assertThat(captor.getValue()).containsExactly(req);
+        assertThat(captor.getValue().getOrderUuid()).isEqualTo(orderUuid);
+        assertThat(captor.getValue().getOrderRequests()).containsExactly(req);
     }
 
 }

@@ -3,10 +3,14 @@ package com.utochkin.shopservice.services;
 
 import com.utochkin.shopservice.dto.ProductDto;
 import com.utochkin.shopservice.dto.ProductDtoRequest;
+import com.utochkin.shopservice.exceptions.InsufficientStockException;
 import com.utochkin.shopservice.exceptions.ProductNotFoundException;
 import com.utochkin.shopservice.mappers.ProductMapper;
 import com.utochkin.shopservice.models.Product;
+import com.utochkin.shopservice.models.StockOperation;
+import com.utochkin.shopservice.models.StockOperationType;
 import com.utochkin.shopservice.repositories.ProductRepository;
+import com.utochkin.shopservice.repositories.StockOperationRepository;
 import com.utochkin.shopservice.requests.OrderRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -21,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -34,6 +39,7 @@ import java.util.stream.Collectors;
 public class ProductService {
 
     private final ProductRepository productRepository;
+    private final StockOperationRepository stockOperationRepository;
     private final ProductMapper productMapper;
 
     private List<Product> fetchProducts(List<OrderRequest> orderRequests) {
@@ -90,8 +96,13 @@ public class ProductService {
 
     @Transactional
     @CacheEvict(value = {"products", "product"}, allEntries = true)
-    public void changeTotalQuantityProductsAfterCreateOrder(List<OrderRequest> orderRequests) {
-        log.info("ProductService: уменьшаем остатки продуктов в бд после создания заказа {}", orderRequests);
+    public void changeTotalQuantityProductsAfterCreateOrder(UUID orderUuid, List<OrderRequest> orderRequests) {
+        log.info("ProductService: уменьшаем остатки продуктов в бд после создания заказа {} {}", orderUuid, orderRequests);
+
+        if (stockOperationRepository.existsByOrderUuidAndType(orderUuid, StockOperationType.DEDUCT)) {
+            log.info("ProductService: списание для заказа {} уже выполнялось — пропускаем (идемпотентный повтор)", orderUuid);
+            return;
+        }
 
         Map<UUID, Boolean> existingProducts = fetchProducts(orderRequests).stream()
                 .collect(Collectors.toMap(Product::getArticleId, product -> true));
@@ -103,17 +114,28 @@ public class ProductService {
 
             int updated = productRepository.deductStock(orderRequest.getArticleId(), orderRequest.getQuantity());
             if (updated == 0) {
-                throw new ProductNotFoundException("Недостаточно товара с articleId " + orderRequest.getArticleId());
+                throw new InsufficientStockException("Недостаточно товара с articleId " + orderRequest.getArticleId());
             }
         }
+
+        stockOperationRepository.save(StockOperation.builder()
+                .orderUuid(orderUuid)
+                .type(StockOperationType.DEDUCT)
+                .createdAt(LocalDateTime.now())
+                .build());
 
         log.info("ProductService: остатки обновлены");
     }
 
     @Transactional
     @CacheEvict(value = {"products", "product"}, allEntries = true)
-    public void changeTotalQuantityProductsAfterRefundedOrder(List<OrderRequest> orderRequests) {
-        log.info("ProductService: восстанавливаем остатки продуктов в бд после возврата {}", orderRequests);
+    public void changeTotalQuantityProductsAfterRefundedOrder(UUID orderUuid, List<OrderRequest> orderRequests) {
+        log.info("ProductService: восстанавливаем остатки продуктов в бд после возврата заказа {} {}", orderUuid, orderRequests);
+
+        if (stockOperationRepository.existsByOrderUuidAndType(orderUuid, StockOperationType.RESTORE)) {
+            log.info("ProductService: восстановление для заказа {} уже выполнялось — пропускаем (идемпотентный повтор)", orderUuid);
+            return;
+        }
 
         for (OrderRequest orderRequest : orderRequests) {
             int updated = productRepository.restoreStock(orderRequest.getArticleId(), orderRequest.getQuantity());
@@ -122,6 +144,12 @@ public class ProductService {
                         orderRequest.getArticleId());
             }
         }
+
+        stockOperationRepository.save(StockOperation.builder()
+                .orderUuid(orderUuid)
+                .type(StockOperationType.RESTORE)
+                .createdAt(LocalDateTime.now())
+                .build());
 
         log.info("ProductService: остатки восстановлены");
     }

@@ -9,6 +9,8 @@ import com.utochkin.orderservice.dto.UserDto;
 import com.utochkin.orderservice.exceptions.FailedOrderStatusException;
 import com.utochkin.orderservice.exceptions.FailedPayOrderException;
 import com.utochkin.orderservice.exceptions.OrderNotFoundException;
+import com.utochkin.orderservice.exceptions.ProductUnavailableException;
+import com.utochkin.orderservice.exceptions.ServiceUnavailableException;
 import com.utochkin.orderservice.mappers.AddressMapper;
 import com.utochkin.orderservice.mappers.OrderMapper;
 import com.utochkin.orderservice.mappers.ProductInfoMapper;
@@ -19,6 +21,8 @@ import com.utochkin.orderservice.repositories.ProductInfoRepository;
 import com.utochkin.orderservice.request.OrderRequest;
 import com.utochkin.orderservice.request.PaymentRequest;
 import com.utochkin.orderservice.request.PaymentResponse;
+import com.utochkin.orderservice.request.StockChangeRequest;
+import feign.FeignException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -163,7 +167,7 @@ public class OrderServiceTest {
 
         given(addressMapper.toEntity(addrDto)).willReturn(new Address());
         given(productInfoMapper.toListEntity(orderRequests)).willReturn(productInfos);
-        given(orderRepository.save(any(Order.class))).willAnswer(inv -> {
+        given(orderRepository.saveAndFlush(any(Order.class))).willAnswer(inv -> {
             Order o = inv.getArgument(0);
             o.setId(5L);
             return o;
@@ -177,11 +181,59 @@ public class OrderServiceTest {
         given(orderMapper.toDto(any(), any(), any(), any())).willReturn(expectedDto);
 
 
-        OrderDto actual = orderService.createOrder(user, orderRequests, addrDto);
+        OrderDto actual = orderService.createOrder(user, uuid, orderRequests, addrDto);
 
         assertThat(actual).isEqualTo(expectedDto);
 
+        then(shopController).should().changeTotalQuantityProductsAfterCreateOrder(new StockChangeRequest(uuid, orderRequests));
         then(outboxService).should(never()).saveToOutbox(any());
+    }
+
+    @Test
+    @DisplayName("createOrder: повторная попытка с тем же orderUuid возвращает существующий заказ (идемпотентность)")
+    void createOrder_duplicateUuid_returnsExistingOrder() {
+        order.setId(7L);
+        given(orderRepository.saveAndFlush(any(Order.class)))
+                .willThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate order_uuid"));
+        given(orderRepository.findByOrderUuid(uuid)).willReturn(Optional.of(order));
+
+        OrderDto expectedDto = new OrderDto(
+                uuid, 100.0, Status.WAITING_FOR_PAYMENT,
+                order.getCreatedAt(), addrDto, new UserDto("bob", "", "", ""), orderRequests
+        );
+        given(orderMapper.toDto(any(), any(), any(), any())).willReturn(expectedDto);
+
+        OrderDto actual = orderService.createOrder(user, uuid, orderRequests, addrDto);
+
+        assertThat(actual).isEqualTo(expectedDto);
+        then(shopController).should(never()).changeTotalQuantityProductsAfterCreateOrder(any());
+    }
+
+    @Test
+    @DisplayName("fallback createOrder: Feign 409 (недостаток товара) → ProductUnavailableException")
+    void fallbackCreateOrder_feign409_productUnavailable() {
+        FeignException fe = org.mockito.Mockito.mock(FeignException.class);
+        org.mockito.Mockito.when(fe.status()).thenReturn(409);
+
+        assertThrows(ProductUnavailableException.class,
+                () -> orderService.fallbackMethodCreateOrder(user, uuid, orderRequests, addrDto, fe));
+    }
+
+    @Test
+    @DisplayName("fallback createOrder: Feign 404 (товар не найден) → ProductUnavailableException")
+    void fallbackCreateOrder_feign404_productUnavailable() {
+        FeignException fe = org.mockito.Mockito.mock(FeignException.class);
+        org.mockito.Mockito.when(fe.status()).thenReturn(404);
+
+        assertThrows(ProductUnavailableException.class,
+                () -> orderService.fallbackMethodCreateOrder(user, uuid, orderRequests, addrDto, fe));
+    }
+
+    @Test
+    @DisplayName("fallback createOrder: прочие сбои → ServiceUnavailableException")
+    void fallbackCreateOrder_otherError_serviceUnavailable() {
+        assertThrows(ServiceUnavailableException.class,
+                () -> orderService.fallbackMethodCreateOrder(user, uuid, orderRequests, addrDto, new RuntimeException("boom")));
     }
 
     @Test
@@ -348,7 +400,7 @@ public class OrderServiceTest {
 
         then(paymentController).should(never()).refundedOrder(any());
         then(orderRepository).should(never()).transitionStatus(any(), anyList(), any());
-        then(shopController).should(never()).changeTotalQuantityProductsAfterRefundedOrder(anyList());
+        then(shopController).should(never()).changeTotalQuantityProductsAfterRefundedOrder(any(StockChangeRequest.class));
         then(productInfoRepository).should(never()).deleteAllById(anyList());
         then(outboxService).should(never()).saveToOutbox(any());
     }
@@ -367,12 +419,12 @@ public class OrderServiceTest {
         orderService.refundedOrder(new PaymentRequest(uuid, "5078 6038 0721 8893"));
 
         then(shopController).should()
-                .changeTotalQuantityProductsAfterRefundedOrder(
+                .changeTotalQuantityProductsAfterRefundedOrder(new StockChangeRequest(uuid,
                         List.of(new OrderRequest(
                                 productInfos.get(0).getArticleId(),
                                 productInfos.get(0).getQuantity()
                         ))
-                );
+                ));
         then(productInfoRepository).should().deleteAllById(List.of(42L));
         then(orderRepository).should(times(1)).save(order);
         then(outboxService).should().saveToOutbox(any(OrderDtoForKafka.class));
@@ -408,7 +460,7 @@ public class OrderServiceTest {
 
         orderService.refundedOrder(new PaymentRequest(uuid, "5078 6038 0721 8893"));
 
-        then(shopController).should(never()).changeTotalQuantityProductsAfterRefundedOrder(anyList());
+        then(shopController).should(never()).changeTotalQuantityProductsAfterRefundedOrder(any(StockChangeRequest.class));
         then(productInfoRepository).should(never()).deleteAllById(anyList());
         then(orderRepository).should(never()).save(order);
         then(outboxService).should(never()).saveToOutbox(any());

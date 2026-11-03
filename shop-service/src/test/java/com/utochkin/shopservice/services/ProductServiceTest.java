@@ -2,15 +2,20 @@ package com.utochkin.shopservice.services;
 
 import com.utochkin.shopservice.dto.ProductDto;
 import com.utochkin.shopservice.dto.ProductDtoRequest;
+import com.utochkin.shopservice.exceptions.InsufficientStockException;
 import com.utochkin.shopservice.exceptions.ProductNotFoundException;
 import com.utochkin.shopservice.mappers.ProductMapper;
 import com.utochkin.shopservice.models.Product;
+import com.utochkin.shopservice.models.StockOperation;
+import com.utochkin.shopservice.models.StockOperationType;
 import com.utochkin.shopservice.repositories.ProductRepository;
+import com.utochkin.shopservice.repositories.StockOperationRepository;
 import com.utochkin.shopservice.requests.OrderRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -36,18 +41,23 @@ class ProductServiceTest {
     private ProductRepository productRepo;
 
     @Mock
+    private StockOperationRepository stockOperationRepository;
+
+    @Mock
     private ProductMapper productMapper;
 
     @InjectMocks
     private ProductService productService;
 
     private UUID uuid;
+    private UUID orderUuid;
     private Product product;
     private OrderRequest orderRequest;
 
     @BeforeEach
     void setUp() {
         uuid = UUID.randomUUID();
+        orderUuid = UUID.randomUUID();
         product = Product.builder()
                 .articleId(uuid)
                 .name("Item")
@@ -103,25 +113,43 @@ class ProductServiceTest {
     }
 
     @Test
-    @DisplayName("changeTotalQuantityProductsAfterCreateOrder: атомарно списывает остаток по каждой позиции")
+    @DisplayName("changeTotalQuantityProductsAfterCreateOrder: атомарно списывает остаток и фиксирует маркер DEDUCT")
     void changeTotalQuantityProductsAfterCreateOrder_happy() {
+        when(stockOperationRepository.existsByOrderUuidAndType(orderUuid, StockOperationType.DEDUCT)).thenReturn(false);
         when(productRepo.findAllByArticleIds(List.of(uuid)))
                 .thenReturn(List.of(product));
         when(productRepo.deductStock(uuid, 3)).thenReturn(1);
 
-        productService.changeTotalQuantityProductsAfterCreateOrder(List.of(orderRequest));
+        productService.changeTotalQuantityProductsAfterCreateOrder(orderUuid, List.of(orderRequest));
 
         verify(productRepo).deductStock(uuid, 3);
-        verify(productRepo, never()).saveAll(any());
+        verify(stockOperationRepository).save(any(StockOperation.class));
+
+        ArgumentCaptor<StockOperation> captor = ArgumentCaptor.forClass(StockOperation.class);
+        verify(stockOperationRepository).save(captor.capture());
+        assertThat(captor.getValue().getOrderUuid()).isEqualTo(orderUuid);
+        assertThat(captor.getValue().getType()).isEqualTo(StockOperationType.DEDUCT);
+    }
+
+    @Test
+    @DisplayName("changeTotalQuantityProductsAfterCreateOrder: повторное списание по тому же заказу пропускается")
+    void changeTotalQuantityProductsAfterCreateOrder_alreadyDeducted_skip() {
+        when(stockOperationRepository.existsByOrderUuidAndType(orderUuid, StockOperationType.DEDUCT)).thenReturn(true);
+
+        productService.changeTotalQuantityProductsAfterCreateOrder(orderUuid, List.of(orderRequest));
+
+        verify(productRepo, never()).deductStock(any(), anyInt());
+        verify(stockOperationRepository, never()).save(any());
     }
 
     @Test
     @DisplayName("changeTotalQuantityProductsAfterCreateOrder: выбрасывает исключение при отсутствии товара")
     void changeTotalQuantityProductsAfterCreateOrder_missing_throws() {
+        when(stockOperationRepository.existsByOrderUuidAndType(orderUuid, StockOperationType.DEDUCT)).thenReturn(false);
         when(productRepo.findAllByArticleIds(List.of(uuid)))
                 .thenReturn(List.of());
 
-        assertThatThrownBy(() -> productService.changeTotalQuantityProductsAfterCreateOrder(List.of(orderRequest)))
+        assertThatThrownBy(() -> productService.changeTotalQuantityProductsAfterCreateOrder(orderUuid, List.of(orderRequest)))
                 .isInstanceOf(ProductNotFoundException.class)
                 .hasMessageContaining("не найден");
 
@@ -129,47 +157,65 @@ class ProductServiceTest {
     }
 
     @Test
-    @DisplayName("changeTotalQuantityProductsAfterCreateOrder: выбрасывает исключение при недостаточном количестве (deductStock вернул 0)")
+    @DisplayName("changeTotalQuantityProductsAfterCreateOrder: недостаток остатка → InsufficientStockException (409)")
     void changeTotalQuantityProductsAfterCreateOrder_insufficient_throws() {
+        when(stockOperationRepository.existsByOrderUuidAndType(orderUuid, StockOperationType.DEDUCT)).thenReturn(false);
         when(productRepo.findAllByArticleIds(List.of(uuid)))
                 .thenReturn(List.of(product));
         when(productRepo.deductStock(uuid, 3)).thenReturn(0);
 
-        assertThatThrownBy(() -> productService.changeTotalQuantityProductsAfterCreateOrder(List.of(orderRequest)))
-                .isInstanceOf(ProductNotFoundException.class)
+        assertThatThrownBy(() -> productService.changeTotalQuantityProductsAfterCreateOrder(orderUuid, List.of(orderRequest)))
+                .isInstanceOf(InsufficientStockException.class)
                 .hasMessageContaining("Недостаточно товара");
     }
 
     @Test
     @DisplayName("changeTotalQuantityProductsAfterCreateOrder: дубли articleId в списке корректно списываются последовательными UPDATE")
     void changeTotalQuantityProductsAfterCreateOrder_duplicateArticleIds_ok() {
+        when(stockOperationRepository.existsByOrderUuidAndType(orderUuid, StockOperationType.DEDUCT)).thenReturn(false);
         when(productRepo.findAllByArticleIds(List.of(uuid, uuid)))
                 .thenReturn(List.of(product));
         when(productRepo.deductStock(uuid, 2)).thenReturn(1);
 
-        productService.changeTotalQuantityProductsAfterCreateOrder(List.of(
+        productService.changeTotalQuantityProductsAfterCreateOrder(orderUuid, List.of(
                 new OrderRequest(uuid, 2), new OrderRequest(uuid, 2)));
 
         verify(productRepo, times(2)).deductStock(uuid, 2);
     }
 
     @Test
-    @DisplayName("changeTotalQuantityProductsAfterRefundedOrder: атомарно восстанавливает остаток")
+    @DisplayName("changeTotalQuantityProductsAfterRefundedOrder: атомарно восстанавливает остаток и фиксирует маркер RESTORE")
     void changeTotalQuantityProductsAfterRefundedOrder_happy() {
+        when(stockOperationRepository.existsByOrderUuidAndType(orderUuid, StockOperationType.RESTORE)).thenReturn(false);
         when(productRepo.restoreStock(uuid, 3)).thenReturn(1);
 
-        productService.changeTotalQuantityProductsAfterRefundedOrder(List.of(orderRequest));
+        productService.changeTotalQuantityProductsAfterRefundedOrder(orderUuid, List.of(orderRequest));
 
         verify(productRepo).restoreStock(uuid, 3);
-        verify(productRepo, never()).saveAll(any());
+
+        ArgumentCaptor<StockOperation> captor = ArgumentCaptor.forClass(StockOperation.class);
+        verify(stockOperationRepository).save(captor.capture());
+        assertThat(captor.getValue().getType()).isEqualTo(StockOperationType.RESTORE);
+    }
+
+    @Test
+    @DisplayName("changeTotalQuantityProductsAfterRefundedOrder: повторное восстановление по тому же заказу пропускается")
+    void changeTotalQuantityProductsAfterRefundedOrder_alreadyRestored_skip() {
+        when(stockOperationRepository.existsByOrderUuidAndType(orderUuid, StockOperationType.RESTORE)).thenReturn(true);
+
+        productService.changeTotalQuantityProductsAfterRefundedOrder(orderUuid, List.of(orderRequest));
+
+        verify(productRepo, never()).restoreStock(any(), anyInt());
+        verify(stockOperationRepository, never()).save(any());
     }
 
     @Test
     @DisplayName("changeTotalQuantityProductsAfterRefundedOrder: несуществующий товар не ломает возврат (warn и продолжение)")
     void changeTotalQuantityProductsAfterRefundedOrder_missing_noException() {
+        when(stockOperationRepository.existsByOrderUuidAndType(orderUuid, StockOperationType.RESTORE)).thenReturn(false);
         when(productRepo.restoreStock(uuid, 3)).thenReturn(0);
 
-        assertThatCode(() -> productService.changeTotalQuantityProductsAfterRefundedOrder(List.of(orderRequest)))
+        assertThatCode(() -> productService.changeTotalQuantityProductsAfterRefundedOrder(orderUuid, List.of(orderRequest)))
                 .doesNotThrowAnyException();
 
         verify(productRepo).restoreStock(uuid, 3);

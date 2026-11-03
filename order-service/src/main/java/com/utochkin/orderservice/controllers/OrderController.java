@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/order/api/v1")
@@ -70,7 +71,7 @@ public class OrderController {
         if (!orderService.checkOrder(compositeRequest.getOrderRequests())) {
             return new ResponseEntity<>("У нас нет товара в таком количестве или вы неправильно задали артикул товара", HttpStatus.BAD_REQUEST);
         } else {
-            OrderDto orderDto = orderService.createOrder(user, compositeRequest.getOrderRequests(), compositeRequest.getAddressDto());
+            OrderDto orderDto = orderService.createOrder(user, UUID.randomUUID(), compositeRequest.getOrderRequests(), compositeRequest.getAddressDto());
             return new ResponseEntity<>(orderDto, HttpStatus.CREATED);
         }
     }

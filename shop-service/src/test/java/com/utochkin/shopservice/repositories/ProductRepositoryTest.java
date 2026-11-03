@@ -1,6 +1,9 @@
 package com.utochkin.shopservice.repositories;
 
 import com.utochkin.shopservice.models.Product;
+import com.utochkin.shopservice.models.StockOperation;
+import com.utochkin.shopservice.models.StockOperationType;
+import com.utochkin.shopservice.repositories.StockOperationRepository;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -9,6 +12,7 @@ import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabas
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -30,7 +34,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DataJpaTest(
         includeFilters = @ComponentScan.Filter(
                 type = FilterType.ASSIGNABLE_TYPE,
-                classes = ProductRepository.class
+                classes = {
+                        ProductRepository.class,
+                        StockOperationRepository.class
+                }
         )
 )
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -44,6 +51,9 @@ class ProductRepositoryTest {
 
     @Autowired
     private ProductRepository productRepository;
+
+    @Autowired
+    private StockOperationRepository stockOperationRepository;
 
     @Autowired
     private EntityManager em;
@@ -261,6 +271,33 @@ class ProductRepositoryTest {
         TransactionTemplate requiresNew = new TransactionTemplate(transactionManager);
         requiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         requiresNew.executeWithoutResult(status -> productRepository.save(product));
+        em.clear();
+    }
+
+    @Test
+    @DisplayName("stock_operations: UNIQUE(order_uuid, type) — второй DEDUCT того же заказа отклоняется")
+    void stockOperations_uniquePerOrderAndType() {
+        UUID orderUuid = UUID.randomUUID();
+
+        commitStockOperation(orderUuid, StockOperationType.DEDUCT);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                        commitStockOperation(orderUuid, StockOperationType.DEDUCT))
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        commitStockOperation(orderUuid, StockOperationType.RESTORE);
+
+        org.assertj.core.api.Assertions.assertThat(stockOperationRepository.count()).isEqualTo(2);
+    }
+
+    private void commitStockOperation(UUID orderUuid, StockOperationType type) {
+        TransactionTemplate requiresNew = new TransactionTemplate(transactionManager);
+        requiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        requiresNew.executeWithoutResult(status -> stockOperationRepository.saveAndFlush(StockOperation.builder()
+                .orderUuid(orderUuid)
+                .type(type)
+                .createdAt(java.time.LocalDateTime.now())
+                .build()));
         em.clear();
     }
 }

@@ -4,6 +4,7 @@ import com.utochkin.shopservice.dto.ProductDto;
 import com.utochkin.shopservice.dto.ProductDtoRequest;
 import com.utochkin.shopservice.requests.ErrorResponse;
 import com.utochkin.shopservice.requests.OrderRequest;
+import com.utochkin.shopservice.requests.StockChangeRequest;
 import com.utochkin.shopservice.services.ProductService;
 import io.swagger.v3.oas.annotations.Hidden;
 import io.swagger.v3.oas.annotations.Operation;
@@ -46,14 +47,14 @@ public class ShopController {
 
     @PostMapping("/changeTotalQuantityProductsAfterCreateOrder")
     @Hidden
-    void changeTotalQuantityProductsAfterCreateOrder(@RequestBody List<OrderRequest> orderRequests) {
-        productService.changeTotalQuantityProductsAfterCreateOrder(orderRequests);
+    void changeTotalQuantityProductsAfterCreateOrder(@RequestBody @Valid StockChangeRequest stockChangeRequest) {
+        productService.changeTotalQuantityProductsAfterCreateOrder(stockChangeRequest.getOrderUuid(), stockChangeRequest.getOrderRequests());
     }
 
     @PostMapping("/changeTotalQuantityProductsAfterRefundedOrder")
     @Hidden
-    void changeTotalQuantityProductsAfterRefundedOrder(@RequestBody List<OrderRequest> orderRequests) {
-        productService.changeTotalQuantityProductsAfterRefundedOrder(orderRequests);
+    void changeTotalQuantityProductsAfterRefundedOrder(@RequestBody @Valid StockChangeRequest stockChangeRequest) {
+        productService.changeTotalQuantityProductsAfterRefundedOrder(stockChangeRequest.getOrderUuid(), stockChangeRequest.getOrderRequests());
     }
 
     @GetMapping("/getAllProducts")

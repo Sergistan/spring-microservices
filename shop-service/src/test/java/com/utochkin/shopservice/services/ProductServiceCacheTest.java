@@ -5,6 +5,7 @@ import com.utochkin.shopservice.dto.ProductDtoRequest;
 import com.utochkin.shopservice.mappers.ProductMapper;
 import com.utochkin.shopservice.models.Product;
 import com.utochkin.shopservice.repositories.ProductRepository;
+import com.utochkin.shopservice.repositories.StockOperationRepository;
 import com.utochkin.shopservice.requests.OrderRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -41,6 +42,9 @@ class ProductServiceCacheTest {
 
     @MockitoBean
     private ProductRepository productRepo;
+
+    @MockitoBean
+    private StockOperationRepository stockOperationRepo;
 
     @MockitoBean
     private ProductMapper productMapper;
@@ -180,10 +184,12 @@ class ProductServiceCacheTest {
         cacheManager.getCache("products").put("0-2-" + pageable.getSort(), List.of(sampleDto));
         cacheManager.getCache("product").put(sampleId, sampleDto);
 
+        given(stockOperationRepo.existsByOrderUuidAndType(any(UUID.class), any(com.utochkin.shopservice.models.StockOperationType.class)))
+                .willReturn(false);
         given(productRepo.findAllByArticleIds(List.of(sampleId))).willReturn(List.of(sampleEntity));
         given(productRepo.deductStock(sampleId, 2)).willReturn(1);
 
-        productService.changeTotalQuantityProductsAfterCreateOrder(
+        productService.changeTotalQuantityProductsAfterCreateOrder(UUID.randomUUID(),
                 List.of(new OrderRequest(sampleId, 2)));
 
         assertThat(cacheManager.getCache("products").get("0-2-" + pageable.getSort())).isNull();
@@ -198,9 +204,11 @@ class ProductServiceCacheTest {
         cacheManager.getCache("products").put("0-2-" + pageable.getSort(), List.of(sampleDto));
         cacheManager.getCache("product").put(sampleId, sampleDto);
 
+        given(stockOperationRepo.existsByOrderUuidAndType(any(UUID.class), any(com.utochkin.shopservice.models.StockOperationType.class)))
+                .willReturn(false);
         given(productRepo.restoreStock(sampleId, 4)).willReturn(1);
 
-        productService.changeTotalQuantityProductsAfterRefundedOrder(
+        productService.changeTotalQuantityProductsAfterRefundedOrder(UUID.randomUUID(),
                 List.of(new OrderRequest(sampleId, 4)));
 
         assertThat(cacheManager.getCache("products").get("0-2-" + pageable.getSort())).isNull();

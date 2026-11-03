@@ -3,9 +3,12 @@ import com.utochkin.orderservice.OrderServiceApplication;
 import com.utochkin.orderservice.controllers.PaymentController;
 import com.utochkin.orderservice.controllers.ShopController;
 import com.utochkin.orderservice.dto.AddressDto;
+import com.utochkin.orderservice.dto.OrderDto;
 import com.utochkin.orderservice.models.Status;
+import com.utochkin.orderservice.models.User;
 import com.utochkin.orderservice.repositories.OutboxRepository;
 import com.utochkin.orderservice.request.*;
+import com.utochkin.orderservice.services.OrderService;
 import com.utochkin.orderservice.services.OutboxRelay;
 import io.github.resilience4j.springboot3.circuitbreaker.autoconfigure.CircuitBreakerAutoConfiguration;
 import io.github.resilience4j.springboot3.retry.autoconfigure.RetryAutoConfiguration;
@@ -38,7 +41,10 @@ import java.util.UUID;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.BDDMockito.then;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -84,6 +90,9 @@ class OrderServiceIntegrationTest {
 
     @Autowired
     private OutboxRepository outboxRepository;
+
+    @Autowired
+    private OrderService orderService;
 
     @MockitoBean
     private ShopController shopController;
@@ -224,6 +233,70 @@ class OrderServiceIntegrationTest {
                 .andExpect(jsonPath("$.messageError").value("Заказ уже оплачен!"));
 
         org.mockito.Mockito.verify(paymentController).paymentOrder(acct);
+    }
+
+    @Test
+    @DisplayName("Идемпотентное создание: повторная попытка с тем же orderUuid не создаёт дубль и не списывает остатки повторно")
+    void createOrder_sameUuid_idempotentReplay() throws Exception {
+        UUID articleId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+        List<OrderRequest> reqs = List.of(new OrderRequest(articleId, 2));
+        UUID orderUuid = UUID.randomUUID();
+
+        given(shopController.checkOrder(reqs)).willReturn(true);
+        given(shopController.getSumTotalPriceOrder(reqs)).willReturn(200.0);
+
+        User user = User.builder().id(1L).username("login").subId("sub").build();
+
+        OrderDto first = orderService.createOrder(user, orderUuid, reqs, new AddressDto("City", "Street", 1, 1));
+        OrderDto second = orderService.createOrder(user, orderUuid, reqs, new AddressDto("City", "Street", 1, 1));
+
+        assertThat(first.orderUuid()).isEqualTo(orderUuid);
+        assertThat(second.orderUuid()).isEqualTo(orderUuid);
+
+        org.mockito.Mockito.verify(shopController, org.mockito.Mockito.times(1))
+                .changeTotalQuantityProductsAfterCreateOrder(
+                        org.mockito.ArgumentMatchers.argThat(scr -> scr != null && orderUuid.equals(scr.getOrderUuid())));
+    }
+
+    @Test
+    @DisplayName("Создание заказа с отрицательным количеством → 400 (валидация)")
+    void createOrder_negativeQuantity_rejected() throws Exception {
+        UUID articleId = UUID.fromString("00000000-0000-0000-0000-000000000010");
+        List<OrderRequest> reqs = List.of(new OrderRequest(articleId, -5));
+
+        CompositeRequest cr = new CompositeRequest(reqs, new AddressDto("City", "Street", 10, 101));
+
+        mvc.perform(post("/order/api/v1/create")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-User-SubId", "sub")
+                        .header("X-User-UserName", "login")
+                        .header("X-User-FirstName", URLEncoder.encode("Иван", UTF_8))
+                        .header("X-User-LastName", URLEncoder.encode("Иванов", UTF_8))
+                        .header("X-User-Email", "ivan@example.com")
+                        .header("X-User-Role", "USER")
+                        .content(objectMapper.writeValueAsString(cr)))
+                .andExpect(status().isBadRequest());
+
+        then(shopController).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("Создание заказа с пустым списком товаров → 400 (валидация)")
+    void createOrder_emptyRequests_rejected() throws Exception {
+        CompositeRequest cr = new CompositeRequest(List.of(), new AddressDto("City", "Street", 10, 101));
+
+        mvc.perform(post("/order/api/v1/create")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-User-SubId", "sub")
+                        .header("X-User-UserName", "login")
+                        .header("X-User-FirstName", URLEncoder.encode("Иван", UTF_8))
+                        .header("X-User-LastName", URLEncoder.encode("Иванов", UTF_8))
+                        .header("X-User-Email", "ivan@example.com")
+                        .header("X-User-Role", "USER")
+                        .content(objectMapper.writeValueAsString(cr)))
+                .andExpect(status().isBadRequest());
+
+        then(shopController).should(never()).checkOrder(any());
     }
 
     @Test

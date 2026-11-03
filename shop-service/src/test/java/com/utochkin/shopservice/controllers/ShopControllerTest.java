@@ -6,8 +6,10 @@ import com.utochkin.shopservice.config.Config;
 import com.utochkin.shopservice.dto.ProductDto;
 import com.utochkin.shopservice.dto.ProductDtoRequest;
 import com.utochkin.shopservice.exceptions.CustomAccessDeniedHandler;
+import com.utochkin.shopservice.exceptions.InsufficientStockException;
 import com.utochkin.shopservice.exceptions.ProductNotFoundException;
 import com.utochkin.shopservice.requests.OrderRequest;
+import com.utochkin.shopservice.requests.StockChangeRequest;
 import com.utochkin.shopservice.services.ProductService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -125,27 +127,61 @@ class ShopControllerTest {
         @Test
         @DisplayName("changeTotalQuantityProductsAfterCreateOrder → 200")
         void changeAfterCreateOrder() throws Exception {
+            UUID orderUuid = UUID.randomUUID();
             List<OrderRequest> reqs = List.of(new OrderRequest(UUID.randomUUID(), 1));
+            StockChangeRequest request = new StockChangeRequest(orderUuid, reqs);
+            willDoNothing().given(productService)
+                    .changeTotalQuantityProductsAfterCreateOrder(orderUuid, reqs);
 
             mvc.perform(post("/shop/api/v1/changeTotalQuantityProductsAfterCreateOrder")
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(reqs)))
+                            .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isOk());
 
-            then(productService).should().changeTotalQuantityProductsAfterCreateOrder(reqs);
+            then(productService).should().changeTotalQuantityProductsAfterCreateOrder(orderUuid, reqs);
+        }
+
+        @Test
+        @DisplayName("changeTotalQuantityProductsAfterCreateOrder → 409 при недостатке товара")
+        void changeAfterCreateOrder_insufficientStock() throws Exception {
+            UUID orderUuid = UUID.randomUUID();
+            List<OrderRequest> reqs = List.of(new OrderRequest(UUID.randomUUID(), 1));
+            willThrow(new InsufficientStockException("Недостаточно товара"))
+                    .given(productService).changeTotalQuantityProductsAfterCreateOrder(orderUuid, reqs);
+
+            mvc.perform(post("/shop/api/v1/changeTotalQuantityProductsAfterCreateOrder")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(new StockChangeRequest(orderUuid, reqs))))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.messageError").value("Недостаточно товара"));
+        }
+
+        @Test
+        @DisplayName("changeTotalQuantityProductsAfterCreateOrder → 400 при отрицательном количестве (валидация)")
+        void changeAfterCreateOrder_negativeQuantity() throws Exception {
+            StockChangeRequest request = new StockChangeRequest(
+                    UUID.randomUUID(), List.of(new OrderRequest(UUID.randomUUID(), -5)));
+
+            mvc.perform(post("/shop/api/v1/changeTotalQuantityProductsAfterCreateOrder")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isBadRequest());
         }
 
         @Test
         @DisplayName("changeTotalQuantityProductsAfterRefundedOrder → 200")
         void changeAfterRefund() throws Exception {
+            UUID orderUuid = UUID.randomUUID();
             List<OrderRequest> reqs = List.of(new OrderRequest(UUID.randomUUID(), 1));
+            willDoNothing().given(productService)
+                    .changeTotalQuantityProductsAfterRefundedOrder(orderUuid, reqs);
 
             mvc.perform(post("/shop/api/v1/changeTotalQuantityProductsAfterRefundedOrder")
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(reqs)))
+                            .content(objectMapper.writeValueAsString(new StockChangeRequest(orderUuid, reqs))))
                     .andExpect(status().isOk());
 
-            then(productService).should().changeTotalQuantityProductsAfterRefundedOrder(reqs);
+            then(productService).should().changeTotalQuantityProductsAfterRefundedOrder(orderUuid, reqs);
         }
     }
 
