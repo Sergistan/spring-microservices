@@ -5,6 +5,7 @@ import com.utochkin.shopservice.dto.ProductDtoRequest;
 import com.utochkin.shopservice.mappers.ProductMapper;
 import com.utochkin.shopservice.models.Product;
 import com.utochkin.shopservice.repositories.ProductRepository;
+import com.utochkin.shopservice.requests.OrderRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -171,6 +172,42 @@ class ProductServiceCacheTest {
         assertThat(cacheManager.getCache("product").get(sampleId)).isNull();
 
         then(productRepo).should().deleteByArticleId(sampleId);
+    }
+
+    @Test
+    @DisplayName("списание остатков при создании заказа инвалидирует кэши product и products")
+    void caching_evictCachesOnChangeQuantityAfterCreateOrder() {
+        cacheManager.getCache("products").put("0-2-" + pageable.getSort(), List.of(sampleDto));
+        cacheManager.getCache("product").put(sampleId, sampleDto);
+
+        given(productRepo.findAllByArticleIds(List.of(sampleId))).willReturn(List.of(sampleEntity));
+
+        productService.changeTotalQuantityProductsAfterCreateOrder(
+                List.of(new OrderRequest(sampleId, 2)));
+
+        assertThat(cacheManager.getCache("products").get("0-2-" + pageable.getSort())).isNull();
+        assertThat(cacheManager.getCache("product").get(sampleId)).isNull();
+
+        then(productRepo).should().saveAll(List.of(sampleEntity));
+        assertThat(sampleEntity.getQuantity()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("восстановление остатков при возврате заказа инвалидирует кэши product и products")
+    void caching_evictCachesOnChangeQuantityAfterRefundedOrder() {
+        cacheManager.getCache("products").put("0-2-" + pageable.getSort(), List.of(sampleDto));
+        cacheManager.getCache("product").put(sampleId, sampleDto);
+
+        given(productRepo.findAllByArticleIds(List.of(sampleId))).willReturn(List.of(sampleEntity));
+
+        productService.changeTotalQuantityProductsAfterRefundedOrder(
+                List.of(new OrderRequest(sampleId, 4)));
+
+        assertThat(cacheManager.getCache("products").get("0-2-" + pageable.getSort())).isNull();
+        assertThat(cacheManager.getCache("product").get(sampleId)).isNull();
+
+        then(productRepo).should().saveAll(List.of(sampleEntity));
+        assertThat(sampleEntity.getQuantity()).isEqualTo(9);
     }
 
     @Test

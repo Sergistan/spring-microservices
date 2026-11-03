@@ -89,6 +89,7 @@ public class ProductService {
     }
 
     @Transactional
+    @CacheEvict(value = {"products", "product"}, allEntries = true)
     public void changeTotalQuantityProductsAfterCreateOrder(List<OrderRequest> orderRequests) {
         log.info("ProductService: уменьшаем остатки продуктов в бд после создания заказа {}", orderRequests);
 
@@ -116,6 +117,8 @@ public class ProductService {
         log.info("ProductService: остатки обновлены");
     }
 
+    @Transactional
+    @CacheEvict(value = {"products", "product"}, allEntries = true)
     public void changeTotalQuantityProductsAfterRefundedOrder(List<OrderRequest> orderRequests) {
         log.info("ProductService: восстанавливаем остатки продуктов в бд после возврата {}", orderRequests);
 
