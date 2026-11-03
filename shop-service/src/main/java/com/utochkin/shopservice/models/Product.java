@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.*;
+import org.hibernate.annotations.Check;
 
 import java.io.Serializable;
 import java.util.UUID;
@@ -15,6 +16,7 @@ import java.util.UUID;
 @Getter
 @Entity
 @Builder
+@Check(constraints = "quantity >= 0")
 @Table(name = "products")
 public class Product implements Serializable {
 

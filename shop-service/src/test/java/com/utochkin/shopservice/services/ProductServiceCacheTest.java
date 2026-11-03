@@ -181,6 +181,7 @@ class ProductServiceCacheTest {
         cacheManager.getCache("product").put(sampleId, sampleDto);
 
         given(productRepo.findAllByArticleIds(List.of(sampleId))).willReturn(List.of(sampleEntity));
+        given(productRepo.deductStock(sampleId, 2)).willReturn(1);
 
         productService.changeTotalQuantityProductsAfterCreateOrder(
                 List.of(new OrderRequest(sampleId, 2)));
@@ -188,8 +189,7 @@ class ProductServiceCacheTest {
         assertThat(cacheManager.getCache("products").get("0-2-" + pageable.getSort())).isNull();
         assertThat(cacheManager.getCache("product").get(sampleId)).isNull();
 
-        then(productRepo).should().saveAll(List.of(sampleEntity));
-        assertThat(sampleEntity.getQuantity()).isEqualTo(3);
+        then(productRepo).should().deductStock(sampleId, 2);
     }
 
     @Test
@@ -198,7 +198,7 @@ class ProductServiceCacheTest {
         cacheManager.getCache("products").put("0-2-" + pageable.getSort(), List.of(sampleDto));
         cacheManager.getCache("product").put(sampleId, sampleDto);
 
-        given(productRepo.findAllByArticleIds(List.of(sampleId))).willReturn(List.of(sampleEntity));
+        given(productRepo.restoreStock(sampleId, 4)).willReturn(1);
 
         productService.changeTotalQuantityProductsAfterRefundedOrder(
                 List.of(new OrderRequest(sampleId, 4)));
@@ -206,8 +206,7 @@ class ProductServiceCacheTest {
         assertThat(cacheManager.getCache("products").get("0-2-" + pageable.getSort())).isNull();
         assertThat(cacheManager.getCache("product").get(sampleId)).isNull();
 
-        then(productRepo).should().saveAll(List.of(sampleEntity));
-        assertThat(sampleEntity.getQuantity()).isEqualTo(9);
+        then(productRepo).should().restoreStock(sampleId, 4);
     }
 
     @Test

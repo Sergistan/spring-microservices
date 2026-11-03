@@ -23,8 +23,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -101,52 +103,76 @@ class ProductServiceTest {
     }
 
     @Test
-    @DisplayName("changeTotalQuantityProductsAfterCreateOrder: уменьшает количество")
+    @DisplayName("changeTotalQuantityProductsAfterCreateOrder: атомарно списывает остаток по каждой позиции")
     void changeTotalQuantityProductsAfterCreateOrder_happy() {
         when(productRepo.findAllByArticleIds(List.of(uuid)))
                 .thenReturn(List.of(product));
+        when(productRepo.deductStock(uuid, 3)).thenReturn(1);
 
         productService.changeTotalQuantityProductsAfterCreateOrder(List.of(orderRequest));
 
-        assertThat(product.getQuantity()).isEqualTo(2);
-        verify(productRepo).saveAll(List.of(product));
+        verify(productRepo).deductStock(uuid, 3);
+        verify(productRepo, never()).saveAll(any());
     }
 
     @Test
-    @DisplayName("changeTotalQuantityProductsAfterCreateOrder: выбрасывает исключение при отсутствии или недостаточном количестве")
-    void changeTotalQuantityProductsAfterCreateOrder_errors() {
+    @DisplayName("changeTotalQuantityProductsAfterCreateOrder: выбрасывает исключение при отсутствии товара")
+    void changeTotalQuantityProductsAfterCreateOrder_missing_throws() {
         when(productRepo.findAllByArticleIds(List.of(uuid)))
                 .thenReturn(List.of());
-        assertThatThrownBy(() -> productService.changeTotalQuantityProductsAfterCreateOrder(List.of(orderRequest)))
-                .isInstanceOf(ProductNotFoundException.class);
 
+        assertThatThrownBy(() -> productService.changeTotalQuantityProductsAfterCreateOrder(List.of(orderRequest)))
+                .isInstanceOf(ProductNotFoundException.class)
+                .hasMessageContaining("не найден");
+
+        verify(productRepo, never()).deductStock(any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("changeTotalQuantityProductsAfterCreateOrder: выбрасывает исключение при недостаточном количестве (deductStock вернул 0)")
+    void changeTotalQuantityProductsAfterCreateOrder_insufficient_throws() {
         when(productRepo.findAllByArticleIds(List.of(uuid)))
                 .thenReturn(List.of(product));
-        product.setQuantity(1);
+        when(productRepo.deductStock(uuid, 3)).thenReturn(0);
+
         assertThatThrownBy(() -> productService.changeTotalQuantityProductsAfterCreateOrder(List.of(orderRequest)))
                 .isInstanceOf(ProductNotFoundException.class)
                 .hasMessageContaining("Недостаточно товара");
     }
 
     @Test
-    @DisplayName("changeTotalQuantityProductsAfterRefundedOrder: восстанавливает количество")
-    void changeTotalQuantityProductsAfterRefundedOrder_happy() {
-        when(productRepo.findAllByArticleIds(List.of(uuid)))
+    @DisplayName("changeTotalQuantityProductsAfterCreateOrder: дубли articleId в списке корректно списываются последовательными UPDATE")
+    void changeTotalQuantityProductsAfterCreateOrder_duplicateArticleIds_ok() {
+        when(productRepo.findAllByArticleIds(List.of(uuid, uuid)))
                 .thenReturn(List.of(product));
+        when(productRepo.deductStock(uuid, 2)).thenReturn(1);
 
-        productService.changeTotalQuantityProductsAfterRefundedOrder(List.of(orderRequest));
+        productService.changeTotalQuantityProductsAfterCreateOrder(List.of(
+                new OrderRequest(uuid, 2), new OrderRequest(uuid, 2)));
 
-        assertThat(product.getQuantity()).isEqualTo(8);
-        verify(productRepo).saveAll(List.of(product));
+        verify(productRepo, times(2)).deductStock(uuid, 2);
     }
 
     @Test
-    @DisplayName("changeTotalQuantityProductsAfterRefundedOrder: выбрасывает исключение, когда пусто")
-    void changeTotalQuantityProductsAfterRefundedOrder_missing_throws() {
-        when(productRepo.findAllByArticleIds(List.of(uuid)))
-                .thenReturn(List.of());
-        assertThatThrownBy(() -> productService.changeTotalQuantityProductsAfterRefundedOrder(List.of(orderRequest)))
-                .isInstanceOf(ProductNotFoundException.class);
+    @DisplayName("changeTotalQuantityProductsAfterRefundedOrder: атомарно восстанавливает остаток")
+    void changeTotalQuantityProductsAfterRefundedOrder_happy() {
+        when(productRepo.restoreStock(uuid, 3)).thenReturn(1);
+
+        productService.changeTotalQuantityProductsAfterRefundedOrder(List.of(orderRequest));
+
+        verify(productRepo).restoreStock(uuid, 3);
+        verify(productRepo, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("changeTotalQuantityProductsAfterRefundedOrder: несуществующий товар не ломает возврат (warn и продолжение)")
+    void changeTotalQuantityProductsAfterRefundedOrder_missing_noException() {
+        when(productRepo.restoreStock(uuid, 3)).thenReturn(0);
+
+        assertThatCode(() -> productService.changeTotalQuantityProductsAfterRefundedOrder(List.of(orderRequest)))
+                .doesNotThrowAnyException();
+
+        verify(productRepo).restoreStock(uuid, 3);
     }
 
     @Test

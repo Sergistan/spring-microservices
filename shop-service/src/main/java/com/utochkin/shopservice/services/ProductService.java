@@ -93,26 +93,19 @@ public class ProductService {
     public void changeTotalQuantityProductsAfterCreateOrder(List<OrderRequest> orderRequests) {
         log.info("ProductService: уменьшаем остатки продуктов в бд после создания заказа {}", orderRequests);
 
-        List<Product> products = fetchProducts(orderRequests);
-
-        Map<UUID, Product> productMap = products.stream().collect(Collectors.toMap(Product::getArticleId, product -> product));
+        Map<UUID, Boolean> existingProducts = fetchProducts(orderRequests).stream()
+                .collect(Collectors.toMap(Product::getArticleId, product -> true));
 
         for (OrderRequest orderRequest : orderRequests) {
-            Product product = productMap.get(orderRequest.getArticleId());
-
-            if (product == null) {
+            if (!existingProducts.containsKey(orderRequest.getArticleId())) {
                 throw new ProductNotFoundException("Продукт с articleId " + orderRequest.getArticleId() + " не найден");
             }
 
-            int remainingQuantity = product.getQuantity() - orderRequest.getQuantity();
-            if (remainingQuantity < 0) {
+            int updated = productRepository.deductStock(orderRequest.getArticleId(), orderRequest.getQuantity());
+            if (updated == 0) {
                 throw new ProductNotFoundException("Недостаточно товара с articleId " + orderRequest.getArticleId());
             }
-
-            product.setQuantity(remainingQuantity);
         }
-
-        productRepository.saveAll(products);
 
         log.info("ProductService: остатки обновлены");
     }
@@ -122,22 +115,13 @@ public class ProductService {
     public void changeTotalQuantityProductsAfterRefundedOrder(List<OrderRequest> orderRequests) {
         log.info("ProductService: восстанавливаем остатки продуктов в бд после возврата {}", orderRequests);
 
-        List<Product> products = fetchProducts(orderRequests);
-
-        Map<UUID, Product> productMap = products.stream().collect(Collectors.toMap(Product::getArticleId, product -> product));
-
         for (OrderRequest orderRequest : orderRequests) {
-            Product product = productMap.get(orderRequest.getArticleId());
-
-            if (product == null) {
-                throw new ProductNotFoundException("Продукт с articleId " + orderRequest.getArticleId() + " не найден");
+            int updated = productRepository.restoreStock(orderRequest.getArticleId(), orderRequest.getQuantity());
+            if (updated == 0) {
+                log.warn("ProductService: товар с articleId {} больше не существует — восстановление остатка для него пропущено",
+                        orderRequest.getArticleId());
             }
-
-            int updatedQuantity = product.getQuantity() + orderRequest.getQuantity();
-            product.setQuantity(updatedQuantity);
         }
-
-        productRepository.saveAll(products);
 
         log.info("ProductService: остатки восстановлены");
     }

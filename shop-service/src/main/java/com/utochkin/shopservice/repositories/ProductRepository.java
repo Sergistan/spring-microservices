@@ -1,9 +1,10 @@
 package com.utochkin.shopservice.repositories;
 
 import com.utochkin.shopservice.models.Product;
-import feign.Param;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -20,4 +21,14 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     Optional <Product> findByArticleId(UUID articleId);
 
     void deleteByArticleId(UUID articleId);
+
+    @Modifying
+    @Query("UPDATE Product p SET p.quantity = p.quantity - :quantity " +
+            "WHERE p.articleId = :articleId AND p.quantity >= :quantity")
+    int deductStock(@Param("articleId") UUID articleId, @Param("quantity") int quantity);
+
+    @Modifying
+    @Query("UPDATE Product p SET p.quantity = p.quantity + :quantity " +
+            "WHERE p.articleId = :articleId")
+    int restoreStock(@Param("articleId") UUID articleId, @Param("quantity") int quantity);
 }
