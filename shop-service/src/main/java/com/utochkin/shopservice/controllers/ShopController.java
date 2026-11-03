@@ -22,6 +22,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -41,7 +42,7 @@ public class ShopController {
 
     @PostMapping("/getSumTotalPriceOrder")
     @Hidden
-    Double getSumTotalPriceOrder(@RequestBody List<OrderRequest> orderRequests) {
+    BigDecimal getSumTotalPriceOrder(@RequestBody List<OrderRequest> orderRequests) {
         return productService.getSumTotalPriceOrder(orderRequests);
     }
 

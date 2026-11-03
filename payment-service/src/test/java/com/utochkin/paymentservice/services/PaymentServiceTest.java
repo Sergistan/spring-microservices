@@ -43,7 +43,7 @@ public class PaymentServiceTest {
     @BeforeEach
     void setUp() {
         orderUuid = UUID.randomUUID();
-        request = new AccountRequest(orderUuid, 100.0, "1234 5678 9012 3456");
+        request = new AccountRequest(orderUuid, java.math.BigDecimal.valueOf(100.0), "1234 5678 9012 3456");
     }
 
     private Payment payment(PaymentType type, Status status, UUID paymentId) {
@@ -51,7 +51,7 @@ public class PaymentServiceTest {
                 .orderUuid(orderUuid)
                 .type(type)
                 .cardNumber(request.getCardNumber())
-                .amount(100.0)
+                .amount(java.math.BigDecimal.valueOf(100.0))
                 .paymentId(paymentId)
                 .status(status)
                 .createdAt(LocalDateTime.now())

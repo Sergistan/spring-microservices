@@ -125,7 +125,7 @@ public class OrderServiceTest {
         given(orderRepository.findByOrderUuid(uuid))
                 .willReturn(Optional.of(order));
         given(orderRepository.findTotalAmountByOrderUuid(uuid))
-                .willReturn(100.0);
+                .willReturn(java.math.BigDecimal.valueOf(100.0));
         given(orderRepository.save(any()))
                 .willAnswer(inv -> inv.getArgument(0));
 
@@ -135,7 +135,7 @@ public class OrderServiceTest {
                 .willReturn(new UserDto("bob", "", "", ""));
         given(orderMapper.toDtoForKafka(any(), any(), any(), any()))
                 .willReturn(new OrderDtoForKafka(
-                        uuid, 100.0, Status.REFUNDED,
+                        uuid, java.math.BigDecimal.valueOf(100.0), Status.REFUNDED,
                         order.getCreatedAt(), LocalDateTime.now(),
                         addrDto, new UserDto("bob", "", "", ""),
                         orderRequests, UUID.randomUUID(), UUID.randomUUID()
@@ -172,10 +172,9 @@ public class OrderServiceTest {
             o.setId(5L);
             return o;
         });
-        given(shopController.getSumTotalPriceOrder(orderRequests)).willReturn(123.0);
+        given(shopController.getSumTotalPriceOrder(orderRequests)).willReturn(java.math.BigDecimal.valueOf(123.0));
 
-        OrderDto expectedDto = new OrderDto(
-                order.getOrderUuid(), 123.0, Status.WAITING_FOR_PAYMENT,
+        OrderDto expectedDto = new OrderDto(order.getOrderUuid(), java.math.BigDecimal.valueOf(123.0), Status.WAITING_FOR_PAYMENT,
                 order.getCreatedAt(), addrDto, new UserDto("bob", "", "", ""), orderRequests
         );
         given(orderMapper.toDto(any(), any(), any(), any())).willReturn(expectedDto);
@@ -197,8 +196,7 @@ public class OrderServiceTest {
                 .willThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate order_uuid"));
         given(orderRepository.findByOrderUuid(uuid)).willReturn(Optional.of(order));
 
-        OrderDto expectedDto = new OrderDto(
-                uuid, 100.0, Status.WAITING_FOR_PAYMENT,
+        OrderDto expectedDto = new OrderDto(uuid, java.math.BigDecimal.valueOf(100.0), Status.WAITING_FOR_PAYMENT,
                 order.getCreatedAt(), addrDto, new UserDto("bob", "", "", ""), orderRequests
         );
         given(orderMapper.toDto(any(), any(), any(), any())).willReturn(expectedDto);
@@ -298,7 +296,7 @@ public class OrderServiceTest {
         given(paymentController.paymentOrder(any())).willReturn(success);
         given(orderMapper.toDtoForKafka(any(), any(), any(), any()))
                 .willReturn(new OrderDtoForKafka(
-                        uuid, 100.0, Status.SUCCESS,
+                        uuid, java.math.BigDecimal.valueOf(100.0), Status.SUCCESS,
                         order.getCreatedAt(), LocalDateTime.now(),
                         addrDto, new UserDto("bob", "", "", ""), orderRequests, success.getPaymentId(), UUID.randomUUID()
                 ));
@@ -323,7 +321,7 @@ public class OrderServiceTest {
         given(paymentController.paymentOrder(any())).willReturn(failed);
         given(orderMapper.toDtoForKafka(any(), any(), any(), any()))
                 .willReturn(new OrderDtoForKafka(
-                        uuid, 100.0, Status.FAILED,
+                        uuid, java.math.BigDecimal.valueOf(100.0), Status.FAILED,
                         order.getCreatedAt(), LocalDateTime.now(),
                         addrDto, new UserDto("bob", "", "", ""), orderRequests, failed.getPaymentId(), UUID.randomUUID()
                 ));
@@ -364,7 +362,7 @@ public class OrderServiceTest {
         given(paymentController.paymentOrder(any())).willReturn(success);
         given(orderMapper.toDtoForKafka(any(), any(), any(), any()))
                 .willReturn(new OrderDtoForKafka(
-                        uuid, 100.0, Status.SUCCESS,
+                        uuid, java.math.BigDecimal.valueOf(100.0), Status.SUCCESS,
                         order.getCreatedAt(), LocalDateTime.now(),
                         addrDto, new UserDto("bob", "", "", ""), orderRequests, success.getPaymentId(), UUID.randomUUID()
                 ));
@@ -410,7 +408,7 @@ public class OrderServiceTest {
     void refundedOrder_successfulPath() {
         order.setOrderStatus(Status.SUCCESS);
         given(orderRepository.findByOrderUuid(uuid)).willReturn(Optional.of(order));
-        given(orderRepository.findTotalAmountByOrderUuid(uuid)).willReturn(100.0);
+        given(orderRepository.findTotalAmountByOrderUuid(uuid)).willReturn(java.math.BigDecimal.valueOf(100.0));
         given(orderRepository.transitionStatus(eq(uuid), anyList(), eq(Status.PROCESSING))).willReturn(1);
 
         PaymentResponse pr = new PaymentResponse(UUID.randomUUID(), Status.REFUNDED);
@@ -452,7 +450,7 @@ public class OrderServiceTest {
     void refundedOrder_nonRefundedResponse_noSideEffects() {
         order.setOrderStatus(Status.SUCCESS);
         given(orderRepository.findByOrderUuid(uuid)).willReturn(Optional.of(order));
-        given(orderRepository.findTotalAmountByOrderUuid(uuid)).willReturn(100.0);
+        given(orderRepository.findTotalAmountByOrderUuid(uuid)).willReturn(java.math.BigDecimal.valueOf(100.0));
         given(orderRepository.transitionStatus(eq(uuid), anyList(), eq(Status.PROCESSING))).willReturn(1);
 
         PaymentResponse pr = new PaymentResponse(UUID.randomUUID(), Status.FAILED);

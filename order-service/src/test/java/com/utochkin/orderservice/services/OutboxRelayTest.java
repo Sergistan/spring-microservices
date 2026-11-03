@@ -43,7 +43,7 @@ public class OutboxRelayTest {
 
     private OutboxEvent event(UUID eventId, UUID orderUuid) {
         OrderDtoForKafka dto = new OrderDtoForKafka(
-                orderUuid, 100.0, com.utochkin.orderservice.models.Status.SUCCESS,
+                orderUuid, java.math.BigDecimal.valueOf(100.0), com.utochkin.orderservice.models.Status.SUCCESS,
                 LocalDateTime.now(), LocalDateTime.now(), null, null, null, UUID.randomUUID(), eventId);
         String payload;
         try {

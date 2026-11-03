@@ -92,7 +92,7 @@ class NotificationServiceApplicationTests {
     void kafkaPublish_triggersEmailService() throws Exception {
         OrderDtoForKafka order = new OrderDtoForKafka(
                 UUID.randomUUID(),
-                99.9,
+                java.math.BigDecimal.valueOf(99.9),
                 Status.SUCCESS,
                 LocalDateTime.now().minusMinutes(5),
                 LocalDateTime.now(),
@@ -124,7 +124,7 @@ class NotificationServiceApplicationTests {
 
         OrderDtoForKafka order = new OrderDtoForKafka(
                 UUID.randomUUID(),
-                99.9,
+                java.math.BigDecimal.valueOf(99.9),
                 Status.SUCCESS,
                 LocalDateTime.now().minusMinutes(5),
                 LocalDateTime.now(),

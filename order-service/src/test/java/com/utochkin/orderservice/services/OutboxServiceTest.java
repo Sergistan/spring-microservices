@@ -38,9 +38,7 @@ public class OutboxServiceTest {
 
     @BeforeEach
     void setUp() {
-        dto = new OrderDtoForKafka(
-                UUID.randomUUID(),
-                100.0,
+        dto = new OrderDtoForKafka(UUID.randomUUID(), java.math.BigDecimal.valueOf(100.0),
                 com.utochkin.orderservice.models.Status.SUCCESS,
                 LocalDateTime.now(),
                 LocalDateTime.now(),

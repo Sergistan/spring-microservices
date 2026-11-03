@@ -14,3 +14,6 @@ databaseChangeLog:
   - include:
       file: /tables/create_table_stock_operations.sql
       relativeToChangeLogFile: true
+  - include:
+      file: /tables/alter_column_products_price.sql
+      relativeToChangeLogFile: true

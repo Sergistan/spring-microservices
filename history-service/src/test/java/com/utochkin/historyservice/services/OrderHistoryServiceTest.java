@@ -49,7 +49,7 @@ class OrderHistoryServiceTest {
     void setup() {
         orderDto = new OrderDtoForKafka(
                 UUID.randomUUID(),
-                120.0,
+                java.math.BigDecimal.valueOf(120.0),
                 com.utochkin.historyservice.models.Status.SUCCESS,
                 LocalDateTime.now().minusDays(1),
                 LocalDateTime.now(),

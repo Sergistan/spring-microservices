@@ -44,7 +44,7 @@ public class ProductInfoRepositoryTest {
     void saveProductInfosForOrder() {
         Order order = Order.builder()
                 .orderUuid(UUID.randomUUID())
-                .totalAmount(50.0)
+                .totalAmount(java.math.BigDecimal.valueOf(50.0))
                 .orderStatus(Status.WAITING_FOR_PAYMENT)
                 .createdAt(LocalDateTime.now())
                 .build();

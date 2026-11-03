@@ -19,8 +19,10 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.math.BigDecimal;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -64,7 +66,7 @@ class ProductRepositoryTest {
     @Autowired
     private PlatformTransactionManager transactionManager;
 
-    private Product persistProduct(UUID articleId, String name, int qty, double price) {
+    private Product persistProduct(UUID articleId, String name, int qty, BigDecimal price) {
         Product p = Product.builder()
                 .articleId(articleId)
                 .name(name)
@@ -81,10 +83,10 @@ class ProductRepositoryTest {
     void findAllByArticleIds_withExistingIds_returnsList() {
         UUID id1 = UUID.randomUUID();
         UUID id2 = UUID.randomUUID();
-        Product p1 = persistProduct(id1, "A", 5, 100.0);
-        Product p2 = persistProduct(id2, "B", 3, 50.0);
+        Product p1 = persistProduct(id1, "A", 5, BigDecimal.valueOf(100.0));
+        Product p2 = persistProduct(id2, "B", 3, BigDecimal.valueOf(50.0));
         // и ещё один, не в запросе
-        persistProduct(UUID.randomUUID(), "X", 1, 10.0);
+        persistProduct(UUID.randomUUID(), "X", 1, BigDecimal.valueOf(10.0));
 
         List<Product> found = productRepository.findAllByArticleIds(List.of(id1, id2));
 
@@ -97,7 +99,7 @@ class ProductRepositoryTest {
     @Test
     @DisplayName("findAllByArticleIds → для несуществующих articleId возвращает пустой список")
     void findAllByArticleIds_withNonExistingIds_returnsEmpty() {
-        persistProduct(UUID.randomUUID(), "A", 5, 100.0);
+        persistProduct(UUID.randomUUID(), "A", 5, BigDecimal.valueOf(100.0));
 
         List<Product> found = productRepository.findAllByArticleIds(List.of(UUID.randomUUID()));
 
@@ -107,7 +109,7 @@ class ProductRepositoryTest {
     @Test
     @DisplayName("findAllByArticleIds → пустой входной список даёт пустой результат")
     void findAllByArticleIds_withEmptyList_returnsEmpty() {
-        persistProduct(UUID.randomUUID(), "A", 5, 100.0);
+        persistProduct(UUID.randomUUID(), "A", 5, BigDecimal.valueOf(100.0));
 
         List<Product> found = productRepository.findAllByArticleIds(List.of());
 
@@ -118,20 +120,20 @@ class ProductRepositoryTest {
     @DisplayName("findByArticleId → существующий артикул возвращает Optional с сущностью")
     void findByArticleId_existing_returnsProduct() {
         UUID id = UUID.randomUUID();
-        Product saved = persistProduct(id, "C", 7, 70.0);
+        Product saved = persistProduct(id, "C", 7, BigDecimal.valueOf(70.0));
 
         Optional<Product> result = productRepository.findByArticleId(id);
 
         assertThat(result).isPresent()
                 .get()
                 .extracting(Product::getName, Product::getPrice)
-                .containsExactly("C", 70.0);
+                .containsExactly("C", BigDecimal.valueOf(70.0));
     }
 
     @Test
     @DisplayName("findByArticleId → несуществующий артикул возвращает Optional.empty()")
     void findByArticleId_nonExisting_returnsEmpty() {
-        persistProduct(UUID.randomUUID(), "C", 7, 70.0);
+        persistProduct(UUID.randomUUID(), "C", 7, BigDecimal.valueOf(70.0));
 
         Optional<Product> result = productRepository.findByArticleId(UUID.randomUUID());
 
@@ -142,7 +144,7 @@ class ProductRepositoryTest {
     @DisplayName("deleteByArticleId → удаляет запись, после чего findByArticleId возвращает пусто")
     void deleteByArticleId_removesRecord() {
         UUID id = UUID.randomUUID();
-        persistProduct(id, "D", 2, 20.0);
+        persistProduct(id, "D", 2, BigDecimal.valueOf(20.0));
 
         assertThat(productRepository.findByArticleId(id)).isPresent();
 
@@ -157,7 +159,7 @@ class ProductRepositoryTest {
     @DisplayName("deductStock → при достаточном остатке атомарно уменьшает и возвращает 1")
     void deductStock_sufficient_updatesQuantity() {
         UUID id = UUID.randomUUID();
-        persistProduct(id, "E", 10, 100.0);
+        persistProduct(id, "E", 10, BigDecimal.valueOf(100.0));
 
         int updated = transactionTemplate.execute(status -> productRepository.deductStock(id, 7));
 
@@ -173,7 +175,7 @@ class ProductRepositoryTest {
     @DisplayName("deductStock → при недостаточном остатке возвращает 0 и не меняет баланс")
     void deductStock_insufficient_returnsZero() {
         UUID id = UUID.randomUUID();
-        persistProduct(id, "E", 5, 100.0);
+        persistProduct(id, "E", 5, BigDecimal.valueOf(100.0));
 
         int updated = transactionTemplate.execute(status -> productRepository.deductStock(id, 7));
 
@@ -188,7 +190,7 @@ class ProductRepositoryTest {
     @Test
     @DisplayName("deductStock → несуществующий товар возвращает 0")
     void deductStock_missingProduct_returnsZero() {
-        persistProduct(UUID.randomUUID(), "E", 5, 100.0);
+        persistProduct(UUID.randomUUID(), "E", 5, BigDecimal.valueOf(100.0));
 
         int updated = transactionTemplate.execute(status ->
                 productRepository.deductStock(UUID.randomUUID(), 1));
@@ -200,7 +202,7 @@ class ProductRepositoryTest {
     @DisplayName("restoreStock → атомарно увеличивает остаток и возвращает 1")
     void restoreStock_increasesQuantity() {
         UUID id = UUID.randomUUID();
-        persistProduct(id, "F", 3, 100.0);
+        persistProduct(id, "F", 3, BigDecimal.valueOf(100.0));
 
         int updated = transactionTemplate.execute(status -> productRepository.restoreStock(id, 4));
 
@@ -229,7 +231,7 @@ class ProductRepositoryTest {
                 .articleId(id)
                 .name("G")
                 .quantity(10)
-                .price(100.0)
+                .price(BigDecimal.valueOf(100.0))
                 .build());
 
         CountDownLatch start = new CountDownLatch(1);

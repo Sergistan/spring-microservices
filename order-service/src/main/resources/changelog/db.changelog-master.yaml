@@ -20,3 +20,6 @@ databaseChangeLog:
   - include:
       file: /tables/create_table_outbox.sql
       relativeToChangeLogFile: true
+  - include:
+      file: /tables/alter_column_orders_total_amount.sql
+      relativeToChangeLogFile: true

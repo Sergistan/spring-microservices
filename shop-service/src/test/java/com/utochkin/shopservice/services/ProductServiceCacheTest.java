@@ -23,8 +23,10 @@ import org.springframework.data.domain.*;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.math.BigDecimal;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -76,9 +78,9 @@ class ProductServiceCacheTest {
         sampleEntity.setArticleId(sampleId);
         sampleEntity.setName("A");
         sampleEntity.setQuantity(5);
-        sampleEntity.setPrice(10.0);
+        sampleEntity.setPrice(BigDecimal.valueOf(10.0));
 
-        sampleDto = new ProductDto(sampleId, "A", 5, 10.0);
+        sampleDto = new ProductDto(sampleId, "A", 5, BigDecimal.valueOf(10.0));
 
         // очистим кеши перед каждым тестом
         cacheManager.getCache("product").clear();
@@ -113,11 +115,11 @@ class ProductServiceCacheTest {
     @Test
     @DisplayName("работа кэширования при добавлении нового продукта")
     void caching_evictProductsOnAddAndPopulateProduct() {
-        ProductDtoRequest req = new ProductDtoRequest("New", 2, 20.0);
+        ProductDtoRequest req = new ProductDtoRequest("New", 2, BigDecimal.valueOf(20.0));
         Product savedEntity = Product.builder()
                 .id(100L)
                 .articleId(UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"))
-                .name("New").quantity(2).price(20.0).build();
+                .name("New").quantity(2).price(BigDecimal.valueOf(20.0)).build();
         ProductDto returnedDto = new ProductDto(
                 savedEntity.getArticleId(),
                 savedEntity.getName(),
@@ -224,9 +226,9 @@ class ProductServiceCacheTest {
 
         given(productRepo.findByArticleId(sampleId)).willReturn(Optional.of(sampleEntity));
 
-        ProductDtoRequest req = new ProductDtoRequest("B", 7, 15.0);
+        ProductDtoRequest req = new ProductDtoRequest("B", 7, BigDecimal.valueOf(15.0));
 
-        ProductDto updatedDto = new ProductDto(sampleId, "B", 7, 15.0);
+        ProductDto updatedDto = new ProductDto(sampleId, "B", 7, BigDecimal.valueOf(15.0));
         given(productMapper.toDto(sampleEntity)).willReturn(updatedDto);
 
         ProductDto result = productService.updateProduct(sampleId, req);

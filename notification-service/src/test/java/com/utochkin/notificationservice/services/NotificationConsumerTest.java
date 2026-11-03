@@ -41,7 +41,7 @@ public class NotificationConsumerTest {
     private OrderDtoForKafka baseOrder() {
         return new OrderDtoForKafka(
                 UUID.randomUUID(),
-                123.45,
+                java.math.BigDecimal.valueOf(123.45),
                 Status.SUCCESS,
                 LocalDateTime.of(2025,7,1,10,0),
                 LocalDateTime.of(2025,7,1,10,5),

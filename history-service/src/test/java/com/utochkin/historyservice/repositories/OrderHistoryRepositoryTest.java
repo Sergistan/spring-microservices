@@ -36,7 +36,7 @@ public class OrderHistoryRepositoryTest {
 
         orderDto = new OrderDtoForKafka(
                 UUID.randomUUID(),
-                120.0,
+                java.math.BigDecimal.valueOf(120.0),
                 Status.SUCCESS,
                 LocalDateTime.now().minusDays(1),
                 LocalDateTime.now(),
@@ -75,7 +75,7 @@ public class OrderHistoryRepositoryTest {
     void save_multipleOrders() {
         OrderDtoForKafka secondOrder = new OrderDtoForKafka(
                 UUID.randomUUID(),
-                230.0,
+                java.math.BigDecimal.valueOf(230.0),
                 Status.FAILED,
                 LocalDateTime.now().minusHours(2),
                 LocalDateTime.now(),

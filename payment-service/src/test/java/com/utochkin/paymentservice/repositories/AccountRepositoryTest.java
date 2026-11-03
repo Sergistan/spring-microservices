@@ -34,7 +34,7 @@ public class AccountRepositoryTest {
     @Autowired
     private EntityManager em;
 
-    private Account persistAccount(String cardNumber, double amount) {
+    private Account persistAccount(String cardNumber, java.math.BigDecimal amount) {
         Account account = Account.builder()
                 .cardNumber(cardNumber)
                 .amountMoney(amount)
@@ -49,20 +49,20 @@ public class AccountRepositoryTest {
     @DisplayName("findAccountByCardNumber → существующий номер возвращает Optional с сущностью")
     void findAccountByCardNumber_existing_returnsEntity() {
         String card = "4444 3333 2222 1111";
-        Account saved = persistAccount(card, 250.0);
+        Account saved = persistAccount(card, java.math.BigDecimal.valueOf(250.0));
 
         Optional<Account> maybe = accountRepository.findAccountByCardNumber(card);
 
         assertThat(maybe).isPresent()
                 .get()
                 .extracting(Account::getAmountMoney, Account::getCardNumber)
-                .containsExactly(250.0, card);
+                .containsExactly(java.math.BigDecimal.valueOf(250.0), card);
     }
 
     @Test
     @DisplayName("findAccountByCardNumber → несуществующий номер возвращает empty")
     void findAccountByCardNumber_nonExisting_returnsEmpty() {
-        persistAccount("5555 6666 7777 8888", 75.0);
+        persistAccount("5555 6666 7777 8888", java.math.BigDecimal.valueOf(75.0));
 
         Optional<Account> maybe = accountRepository.findAccountByCardNumber("0000 0000 0000 0000");
 
@@ -72,54 +72,54 @@ public class AccountRepositoryTest {
     @Test
     @DisplayName("withdraw → при достаточном балансе атомарно уменьшает и возвращает 1")
     void withdraw_sufficient_updatesBalance() {
-        persistAccount("4444 3333 2222 1111", 250.0);
+        persistAccount("4444 3333 2222 1111", java.math.BigDecimal.valueOf(250.0));
 
-        int updated = accountRepository.withdraw("4444 3333 2222 1111", 100.0);
+        int updated = accountRepository.withdraw("4444 3333 2222 1111", java.math.BigDecimal.valueOf(100.0));
         em.clear();
 
         assertThat(updated).isEqualTo(1);
         assertThat(accountRepository.findAccountByCardNumber("4444 3333 2222 1111"))
                 .get()
                 .extracting(Account::getAmountMoney)
-                .isEqualTo(150.0);
+                .isEqualTo(java.math.BigDecimal.valueOf(150.0).setScale(2));
     }
 
     @Test
     @DisplayName("withdraw → при недостаточном балансе не меняет баланс и возвращает 0")
     void withdraw_insufficient_returnsZero() {
-        persistAccount("4444 3333 2222 1111", 50.0);
+        persistAccount("4444 3333 2222 1111", java.math.BigDecimal.valueOf(50.0));
 
-        int updated = accountRepository.withdraw("4444 3333 2222 1111", 100.0);
+        int updated = accountRepository.withdraw("4444 3333 2222 1111", java.math.BigDecimal.valueOf(100.0));
 
         assertThat(updated).isZero();
         em.clear();
         assertThat(accountRepository.findAccountByCardNumber("4444 3333 2222 1111"))
                 .get()
                 .extracting(Account::getAmountMoney)
-                .isEqualTo(50.0);
+                .isEqualTo(java.math.BigDecimal.valueOf(50.0).setScale(2));
     }
 
     @Test
     @DisplayName("withdraw → несуществующая карта возвращает 0")
     void withdraw_unknownCard_returnsZero() {
-        persistAccount("4444 3333 2222 1111", 50.0);
+        persistAccount("4444 3333 2222 1111", java.math.BigDecimal.valueOf(50.0));
 
-        assertThat(accountRepository.withdraw("0000 0000 0000 0000", 10.0)).isZero();
+        assertThat(accountRepository.withdraw("0000 0000 0000 0000", java.math.BigDecimal.valueOf(10.0))).isZero();
     }
 
     @Test
     @DisplayName("deposit → атомарно увеличивает баланс и возвращает 1")
     void deposit_increasesBalance() {
-        persistAccount("4444 3333 2222 1111", 250.0);
+        persistAccount("4444 3333 2222 1111", java.math.BigDecimal.valueOf(250.0));
 
-        int updated = accountRepository.deposit("4444 3333 2222 1111", 75.0);
+        int updated = accountRepository.deposit("4444 3333 2222 1111", java.math.BigDecimal.valueOf(75.0));
         em.clear();
 
         assertThat(updated).isEqualTo(1);
         assertThat(accountRepository.findAccountByCardNumber("4444 3333 2222 1111"))
                 .get()
                 .extracting(Account::getAmountMoney)
-                .isEqualTo(325.0);
+                .isEqualTo(java.math.BigDecimal.valueOf(325.0).setScale(2));
     }
 
 }

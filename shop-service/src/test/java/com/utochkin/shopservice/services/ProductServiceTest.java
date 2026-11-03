@@ -23,8 +23,10 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.math.BigDecimal;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -62,7 +64,7 @@ class ProductServiceTest {
                 .articleId(uuid)
                 .name("Item")
                 .quantity(5)
-                .price(10.0)
+                .price(BigDecimal.valueOf(10.0))
                 .build();
         orderRequest = new OrderRequest(uuid, 3);
     }
@@ -97,8 +99,8 @@ class ProductServiceTest {
     void getSumTotalPriceOrder_happy() {
         when(productRepo.findAllByArticleIds(List.of(uuid)))
                 .thenReturn(List.of(product));
-        double sum = productService.getSumTotalPriceOrder(List.of(orderRequest));
-        assertThat(sum).isEqualTo(30.0);
+        BigDecimal sum = productService.getSumTotalPriceOrder(List.of(orderRequest));
+        assertThat(sum).isEqualByComparingTo(BigDecimal.valueOf(30.0));
     }
 
     @Test
@@ -226,11 +228,11 @@ class ProductServiceTest {
     void getAllProducts_happy() {
         Pageable pg = PageRequest.of(0,2);
         Product p2 = Product.builder().articleId(UUID.randomUUID())
-                .name("X").quantity(1).price(5.0).build();
+                .name("X").quantity(1).price(BigDecimal.valueOf(5.0)).build();
         when(productRepo.findAll(pg))
                 .thenReturn(new PageImpl<>(List.of(product, p2)));
-        ProductDto dto1 = new ProductDto(uuid, "Item", 5, 10.0);
-        ProductDto dto2 = new ProductDto(p2.getArticleId(), "X",1,5.0);
+        ProductDto dto1 = new ProductDto(uuid, "Item", 5, BigDecimal.valueOf(10.0));
+        ProductDto dto2 = new ProductDto(p2.getArticleId(), "X", 1, BigDecimal.valueOf(5.0));
         when(productMapper.toListDto(List.of(product, p2))).thenReturn(List.of(dto1, dto2));
 
         List<ProductDto> out = productService.getAllProducts(pg);
@@ -240,7 +242,7 @@ class ProductServiceTest {
     @Test
     @DisplayName("getProduct")
     void getProduct_cases() {
-        ProductDto dto = new ProductDto(uuid, "Item", 5, 10.0);
+        ProductDto dto = new ProductDto(uuid, "Item", 5, BigDecimal.valueOf(10.0));
         when(productRepo.findByArticleId(uuid)).thenReturn(Optional.of(product));
         when(productMapper.toDto(product)).thenReturn(dto);
         assertThat(productService.getProduct(uuid)).isEqualTo(dto);
@@ -253,13 +255,13 @@ class ProductServiceTest {
     @Test
     @DisplayName("addProduct")
     void addProduct_happy() {
-        ProductDtoRequest req = new ProductDtoRequest("New", 4, 20.0);
+        ProductDtoRequest req = new ProductDtoRequest("New", 4, BigDecimal.valueOf(20.0));
 
         Product ent = new Product(); ent.setArticleId(UUID.randomUUID());
         when(productMapper.toEntity(any())).thenReturn(ent);
 
         when(productRepo.save(ent)).thenReturn(ent);
-        ProductDto outDto = new ProductDto(ent.getArticleId(),"New",4,20.0);
+        ProductDto outDto = new ProductDto(ent.getArticleId(), "New", 4, BigDecimal.valueOf(20.0));
         when(productMapper.toDto(ent)).thenReturn(outDto);
 
         ProductDto res = productService.addProduct(req);
@@ -282,17 +284,17 @@ class ProductServiceTest {
     @Test
     @DisplayName("updateProduct")
     void updateProduct_cases() {
-        ProductDtoRequest req = new ProductDtoRequest("Upd", 2, 15.0);
+        ProductDtoRequest req = new ProductDtoRequest("Upd", 2, BigDecimal.valueOf(15.0));
         when(productRepo.findByArticleId(uuid)).thenReturn(Optional.of(product));
         when(productRepo.save(product)).thenReturn(product);
-        ProductDto outDto = new ProductDto(uuid, "Upd", 2, 15.0);
+        ProductDto outDto = new ProductDto(uuid, "Upd", 2, BigDecimal.valueOf(15.0));
         when(productMapper.toDto(product)).thenReturn(outDto);
 
         ProductDto res = productService.updateProduct(uuid, req);
         assertThat(res).isEqualTo(outDto);
         assertThat(product.getName()).isEqualTo("Upd");
         assertThat(product.getQuantity()).isEqualTo(2);
-        assertThat(product.getPrice()).isEqualTo(15.0);
+        assertThat(product.getPrice()).isEqualByComparingTo(BigDecimal.valueOf(15.0));
 
         when(productRepo.findByArticleId(uuid)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> productService.updateProduct(uuid, req))

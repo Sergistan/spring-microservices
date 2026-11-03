@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
 
+import java.math.BigDecimal;
+
 @NoArgsConstructor
 @AllArgsConstructor
 @Setter
@@ -26,6 +28,6 @@ public class Account {
 
     @NotNull
     @Positive
-    @Column(name = "amount_money")
-    private Double amountMoney;
+    @Column(name = "amount_money", precision = 19, scale = 2)
+    private BigDecimal amountMoney;
 }

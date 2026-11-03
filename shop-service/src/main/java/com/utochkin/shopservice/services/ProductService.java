@@ -70,28 +70,28 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
-    public Double getSumTotalPriceOrder(List<OrderRequest> orderRequests) {
+    public BigDecimal getSumTotalPriceOrder(List<OrderRequest> orderRequests) {
         log.info("ProductService: расчёт суммы для {}", orderRequests);
 
         List<Product> products = fetchProducts(orderRequests);
 
-        Map<UUID, Double> productPrices = products.stream().collect(Collectors.toMap(Product::getArticleId, Product::getPrice));
+        Map<UUID, BigDecimal> productPrices = products.stream().collect(Collectors.toMap(Product::getArticleId, Product::getPrice));
 
-        double rawSum = orderRequests.stream()
-                .mapToDouble(orderRequest -> {
-                    Double price = productPrices.get(orderRequest.getArticleId());
+        BigDecimal sum = orderRequests.stream()
+                .map(orderRequest -> {
+                    BigDecimal price = productPrices.get(orderRequest.getArticleId());
                     if (price == null) {
                         throw new ProductNotFoundException("Продукт с articleId " + orderRequest.getArticleId() + " не найден");
                     }
-                    return price * orderRequest.getQuantity();
+                    return price.multiply(BigDecimal.valueOf(orderRequest.getQuantity()));
                 })
-                .sum();
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal rounded = BigDecimal.valueOf(rawSum).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal rounded = sum.setScale(2, RoundingMode.HALF_UP);
 
         log.info("ProductService: сумма заказа {}", rounded);
 
-        return rounded.doubleValue();
+        return rounded;
     }
 
     @Transactional

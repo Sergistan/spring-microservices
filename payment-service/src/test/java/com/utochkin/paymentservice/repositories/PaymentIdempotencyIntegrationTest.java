@@ -69,10 +69,10 @@ public class PaymentIdempotencyIntegrationTest {
     void setUp() {
         accountRepository.deleteAll();
         paymentRepository.deleteAll();
-        accountRepository.save(Account.builder().cardNumber(card).amountMoney(1000.0).build());
+        accountRepository.save(Account.builder().cardNumber(card).amountMoney(java.math.BigDecimal.valueOf(1000.0)).build());
     }
 
-    private double balance() {
+    private java.math.BigDecimal balance() {
         return accountRepository.findAccountByCardNumber(card).orElseThrow().getAmountMoney();
     }
 
@@ -81,13 +81,13 @@ public class PaymentIdempotencyIntegrationTest {
     void pay_sameOrderTwice_chargesOnce() {
         UUID orderUuid = UUID.randomUUID();
 
-        PaymentResponse first = paymentService.paymentOrder(new AccountRequest(orderUuid, 100.0, card));
-        PaymentResponse second = paymentService.paymentOrder(new AccountRequest(orderUuid, 100.0, card));
+        PaymentResponse first = paymentService.paymentOrder(new AccountRequest(orderUuid, java.math.BigDecimal.valueOf(100.0), card));
+        PaymentResponse second = paymentService.paymentOrder(new AccountRequest(orderUuid, java.math.BigDecimal.valueOf(100.0), card));
 
         assertThat(first.getStatus()).isEqualTo(Status.SUCCESS);
         assertThat(second.getStatus()).isEqualTo(Status.SUCCESS);
         assertThat(second.getPaymentId()).isEqualTo(first.getPaymentId());
-        assertThat(balance()).isEqualTo(900.0);
+        assertThat(balance()).isEqualByComparingTo(java.math.BigDecimal.valueOf(900.0));
         assertThat(paymentRepository.findAll()).hasSize(1);
     }
 
@@ -95,7 +95,7 @@ public class PaymentIdempotencyIntegrationTest {
     @DisplayName("конкурентная оплата одного заказа списывает деньги ровно один раз")
     void pay_concurrent_chargesOnce() throws Exception {
         UUID orderUuid = UUID.randomUUID();
-        AccountRequest request = new AccountRequest(orderUuid, 100.0, card);
+        AccountRequest request = new AccountRequest(orderUuid, java.math.BigDecimal.valueOf(100.0), card);
 
         CountDownLatch start = new CountDownLatch(1);
         Callable<PaymentResponse> task = () -> {
@@ -115,7 +115,7 @@ public class PaymentIdempotencyIntegrationTest {
             assertThat(r1.getStatus()).isEqualTo(Status.SUCCESS);
             assertThat(r2.getStatus()).isEqualTo(Status.SUCCESS);
             assertThat(r1.getPaymentId()).isEqualTo(r2.getPaymentId());
-            assertThat(balance()).isEqualTo(900.0);
+            assertThat(balance()).isEqualByComparingTo(java.math.BigDecimal.valueOf(900.0));
             assertThat(paymentRepository.findAll()).hasSize(1);
         } finally {
             executor.shutdownNow();
@@ -127,18 +127,18 @@ public class PaymentIdempotencyIntegrationTest {
     void refund_sameOrderTwice_depositsOnce() {
         UUID orderUuid = UUID.randomUUID();
 
-        PaymentResponse pay = paymentService.paymentOrder(new AccountRequest(orderUuid, 100.0, card));
+        PaymentResponse pay = paymentService.paymentOrder(new AccountRequest(orderUuid, java.math.BigDecimal.valueOf(100.0), card));
         assertThat(pay.getStatus()).isEqualTo(Status.SUCCESS);
-        assertThat(balance()).isEqualTo(900.0);
+        assertThat(balance()).isEqualByComparingTo(java.math.BigDecimal.valueOf(900.0));
 
-        AccountRequest refundRequest = new AccountRequest(orderUuid, 100.0, card);
+        AccountRequest refundRequest = new AccountRequest(orderUuid, java.math.BigDecimal.valueOf(100.0), card);
         PaymentResponse first = paymentService.refundedOrder(refundRequest);
         PaymentResponse second = paymentService.refundedOrder(refundRequest);
 
         assertThat(first.getStatus()).isEqualTo(Status.REFUNDED);
         assertThat(second.getStatus()).isEqualTo(Status.REFUNDED);
         assertThat(second.getPaymentId()).isEqualTo(first.getPaymentId()).isEqualTo(pay.getPaymentId());
-        assertThat(balance()).isEqualTo(1000.0);
+        assertThat(balance()).isEqualByComparingTo(java.math.BigDecimal.valueOf(1000.0));
 
         List<Payment> payments = paymentRepository.findAll();
         assertThat(payments).hasSize(2);
@@ -150,11 +150,11 @@ public class PaymentIdempotencyIntegrationTest {
     @DisplayName("возврат на другую карту отклоняется")
     void refund_anotherCard_rejected() {
         UUID orderUuid = UUID.randomUUID();
-        paymentService.paymentOrder(new AccountRequest(orderUuid, 100.0, card));
+        paymentService.paymentOrder(new AccountRequest(orderUuid, java.math.BigDecimal.valueOf(100.0), card));
 
-        assertThatThrownBy(() -> paymentService.refundedOrder(new AccountRequest(orderUuid, 100.0, "9999 8888 7777 6666")))
+        assertThatThrownBy(() -> paymentService.refundedOrder(new AccountRequest(orderUuid, java.math.BigDecimal.valueOf(100.0), "9999 8888 7777 6666")))
                 .isInstanceOf(RefundNotPossibleException.class);
-        assertThat(balance()).isEqualTo(900.0);
+        assertThat(balance()).isEqualByComparingTo(java.math.BigDecimal.valueOf(900.0));
     }
 
     @Test
@@ -162,14 +162,14 @@ public class PaymentIdempotencyIntegrationTest {
     void pay_insufficient_thenRetryPossible() {
         UUID orderUuid = UUID.randomUUID();
 
-        PaymentResponse failed = paymentService.paymentOrder(new AccountRequest(orderUuid, 1500.0, card));
+        PaymentResponse failed = paymentService.paymentOrder(new AccountRequest(orderUuid, java.math.BigDecimal.valueOf(1500.0), card));
         assertThat(failed.getStatus()).isEqualTo(Status.FAILED);
-        assertThat(balance()).isEqualTo(1000.0);
+        assertThat(balance()).isEqualByComparingTo(java.math.BigDecimal.valueOf(1000.0));
 
-        transactionTemplate.executeWithoutResult(status -> accountRepository.deposit(card, 1000.0));
+        transactionTemplate.executeWithoutResult(status -> accountRepository.deposit(card, java.math.BigDecimal.valueOf(1000.0)));
 
-        PaymentResponse retried = paymentService.paymentOrder(new AccountRequest(orderUuid, 1500.0, card));
+        PaymentResponse retried = paymentService.paymentOrder(new AccountRequest(orderUuid, java.math.BigDecimal.valueOf(1500.0), card));
         assertThat(retried.getStatus()).isEqualTo(Status.SUCCESS);
-        assertThat(balance()).isEqualTo(500.0);
+        assertThat(balance()).isEqualByComparingTo(java.math.BigDecimal.valueOf(500.0));
     }
 }

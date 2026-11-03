@@ -8,6 +8,7 @@ import lombok.*;
 import org.hibernate.annotations.Check;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @NoArgsConstructor
@@ -37,8 +38,8 @@ public class Product implements Serializable {
     @Positive
     private Integer quantity;
 
-    @Column(name = "price")
+    @Column(name = "price", precision = 19, scale = 2)
     @NotNull
     @Positive
-    private Double price;
+    private BigDecimal price;
 }

@@ -74,8 +74,7 @@ public class OrderControllerTest {
 
         given(orderService.checkOrder(requests)).willReturn(true);
 
-        OrderDto returned = new OrderDto(
-                UUID.randomUUID(), 300.0, /* status */ null, /*createdAt*/null,
+        OrderDto returned = new OrderDto(UUID.randomUUID(), java.math.BigDecimal.valueOf(300.0), /* status */ null, /*createdAt*/null,
                 address, /*userDto*/null, requests
         );
         given(orderService.createOrder(eq(createdUser), any(UUID.class), eq(requests), eq(address)))

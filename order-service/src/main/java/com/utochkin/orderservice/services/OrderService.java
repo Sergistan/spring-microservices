@@ -166,7 +166,7 @@ public class OrderService {
             throw new FailedOrderStatusException("Заказ уже оплачен!");
         }
 
-        Double totalAmountById = orderRepository.findTotalAmountByOrderUuid(paymentRequest.getOrderUuid());
+        java.math.BigDecimal totalAmountById = orderRepository.findTotalAmountByOrderUuid(paymentRequest.getOrderUuid());
         PaymentResponse paymentResponse = paymentController.paymentOrder(new AccountRequest(
                 paymentRequest.getOrderUuid(), totalAmountById, paymentRequest.getCardNumber()));
 
@@ -204,7 +204,7 @@ public class OrderService {
             throw new FailedOrderStatusException("Заказ нельзя отменить, т.к. он не был оплачен!");
         }
 
-        Double totalAmountById = orderRepository.findTotalAmountByOrderUuid(paymentRequest.getOrderUuid());
+        java.math.BigDecimal totalAmountById = orderRepository.findTotalAmountByOrderUuid(paymentRequest.getOrderUuid());
         PaymentResponse refundedOrder = paymentController.refundedOrder(new AccountRequest(
                 paymentRequest.getOrderUuid(), totalAmountById, paymentRequest.getCardNumber()));
 

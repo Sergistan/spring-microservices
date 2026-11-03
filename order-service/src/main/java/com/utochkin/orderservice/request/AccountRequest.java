@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @AllArgsConstructor
@@ -16,7 +17,7 @@ public class AccountRequest {
 
     @NotNull
     @Positive
-    private Double totalAmount;
+    private BigDecimal totalAmount;
 
     @NotNull
     @Pattern(

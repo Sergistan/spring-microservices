@@ -45,11 +45,11 @@ public class ShopControllerTest {
     void getSumTotalPriceOrder_ReturnsSum() {
         OrderRequest req = new OrderRequest(UUID.randomUUID(), 3);
         List<OrderRequest> requests = List.of(req);
-        given(shopController.getSumTotalPriceOrder(requests)).willReturn(123.45);
+        given(shopController.getSumTotalPriceOrder(requests)).willReturn(java.math.BigDecimal.valueOf(123.45));
 
-        Double sum = shopController.getSumTotalPriceOrder(requests);
+        java.math.BigDecimal sum = shopController.getSumTotalPriceOrder(requests);
 
-        assertThat(sum).isEqualTo(123.45);
+        assertThat(sum).isEqualByComparingTo(java.math.BigDecimal.valueOf(123.45));
 
         ArgumentCaptor<List<OrderRequest>> captor = ArgumentCaptor.forClass(List.class);
         verify(shopController).getSumTotalPriceOrder(captor.capture());

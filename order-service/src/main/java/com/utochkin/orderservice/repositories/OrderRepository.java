@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,7 +16,7 @@ import java.util.UUID;
 public interface OrderRepository extends JpaRepository<Order, Long> {
 
     @Query("SELECT o.totalAmount FROM Order o WHERE o.orderUuid = :orderUuid")
-    Double findTotalAmountByOrderUuid(@Param("orderUuid") UUID orderUuid);
+    BigDecimal findTotalAmountByOrderUuid(@Param("orderUuid") UUID orderUuid);
 
     Optional<Order> findByOrderUuid(UUID orderUuid);
 

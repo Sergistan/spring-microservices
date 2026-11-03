@@ -29,6 +29,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -90,7 +91,7 @@ class ShopServiceApplicationTests {
         p.setArticleId(UUID.randomUUID());
         p.setName("Phone");
         p.setQuantity(10);
-        p.setPrice(499.99);
+        p.setPrice(BigDecimal.valueOf(499.99));
         existingId = p.getArticleId();
         productRepository.save(p);
     }
@@ -126,7 +127,7 @@ class ShopServiceApplicationTests {
     @Test
     @DisplayName("POST /shop/api/v1/addProduct — создает продукт и возвращает dto с 201")
     void addProduct_creates() throws Exception {
-        ProductDtoRequest req = new ProductDtoRequest("Laptop", 5, 1299.0);
+        ProductDtoRequest req = new ProductDtoRequest("Laptop", 5, BigDecimal.valueOf(1299.0));
         String json = mapper.writeValueAsString(req);
 
         mvc.perform(post("/shop/api/v1/addProduct")
@@ -162,7 +163,7 @@ class ShopServiceApplicationTests {
     @Test
     @DisplayName("PUT /shop/api/v1/updateProduct/{id} — обновляет и возвращает dto")
     void updateProduct_updates() throws Exception {
-        ProductDtoRequest req = new ProductDtoRequest("PhoneX", 20, 599.0);
+        ProductDtoRequest req = new ProductDtoRequest("PhoneX", 20, BigDecimal.valueOf(599.0));
         String json = mapper.writeValueAsString(req);
 
         mvc.perform(put("/shop/api/v1/updateProduct/{id}", existingId)
@@ -180,7 +181,7 @@ class ShopServiceApplicationTests {
     @Test
     @DisplayName("PUT /shop/api/v1/updateProduct/{id} — 404 если отсутствует")
     void updateProduct_notFound() throws Exception {
-        ProductDtoRequest req = new ProductDtoRequest("X",1,10.0);
+        ProductDtoRequest req = new ProductDtoRequest("X", 1, BigDecimal.valueOf(10.0));
         mvc.perform(put("/shop/api/v1/updateProduct/{id}", UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))

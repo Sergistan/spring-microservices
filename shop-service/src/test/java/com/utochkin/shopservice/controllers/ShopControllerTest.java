@@ -28,7 +28,9 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.math.BigDecimal;
 import java.util.List;
+import java.math.BigDecimal;
 import java.util.UUID;
 
 import static org.mockito.BDDMockito.*;
@@ -62,8 +64,8 @@ class ShopControllerTest {
     @DisplayName("updateProduct разрешен, когда у нас пользователь Admin")
     void update_ok_withAdminRole() throws Exception {
         UUID id = UUID.randomUUID();
-        var req = new ProductDtoRequest("L", 2, 200.0);
-        var dto = new ProductDto(id, "L", 2, 200.0);
+        var req = new ProductDtoRequest("L", 2, BigDecimal.valueOf(200.0));
+        var dto = new ProductDto(id, "L", 2, BigDecimal.valueOf(200.0));
         given(productService.updateProduct(id, req)).willReturn(dto);
 
         mvc.perform(put("/shop/api/v1/updateProduct/{id}", id)
@@ -81,7 +83,7 @@ class ShopControllerTest {
         mvc.perform(put("/shop/api/v1/updateProduct/{id}", UUID.randomUUID())
                         .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_USER")))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new ProductDtoRequest("X", 1, 10.0))))
+                        .content(objectMapper.writeValueAsString(new ProductDtoRequest("X", 1, BigDecimal.valueOf(10.0)))))
                 .andExpect(status().isForbidden());
     }
 
@@ -108,7 +110,7 @@ class ShopControllerTest {
         @DisplayName("проверка getSumTotalPriceOrder")
         void getSumTotalPriceOrder_sum() throws Exception {
             List<OrderRequest> reqs = List.of(new OrderRequest(UUID.randomUUID(), 5));
-            given(productService.getSumTotalPriceOrder(reqs)).willReturn(123.45);
+            given(productService.getSumTotalPriceOrder(reqs)).willReturn(BigDecimal.valueOf(123.45));
 
             mvc.perform(post("/shop/api/v1/getSumTotalPriceOrder")
                             .contentType(MediaType.APPLICATION_JSON)
@@ -193,8 +195,8 @@ class ShopControllerTest {
         @Test
         @DisplayName("GET /getAllProducts → 200 + list")
         void getAllProducts() throws Exception {
-            var dto1 = new ProductDto(UUID.randomUUID(), "A", 10, 100.0);
-            var dto2 = new ProductDto(UUID.randomUUID(), "B", 5, 50.0);
+            var dto1 = new ProductDto(UUID.randomUUID(), "A", 10, BigDecimal.valueOf(100.0));
+            var dto2 = new ProductDto(UUID.randomUUID(), "B", 5, BigDecimal.valueOf(50.0));
             given(productService.getAllProducts(PageRequest.of(0, 2, Sort.by("name").ascending())))
                     .willReturn(List.of(dto1, dto2));
 
@@ -213,7 +215,7 @@ class ShopControllerTest {
         @DisplayName("GET /getProducts/{id} → 200 + dto")
         void getProduct_ok() throws Exception {
             UUID id = UUID.randomUUID();
-            var dto = new ProductDto(id, "X", 7, 77.0);
+            var dto = new ProductDto(id, "X", 7, BigDecimal.valueOf(77.0));
             given(productService.getProduct(id)).willReturn(dto);
 
             mvc.perform(get("/shop/api/v1/getProducts/{id}", id))
@@ -238,8 +240,8 @@ class ShopControllerTest {
         @Test
         @DisplayName("POST /addProduct → 201 + новое dto")
         void addProduct() throws Exception {
-            var req = new ProductDtoRequest("P", 3, 300.0);
-            var dto = new ProductDto(UUID.randomUUID(), "P", 3, 300.0);
+            var req = new ProductDtoRequest("P", 3, BigDecimal.valueOf(300.0));
+            var dto = new ProductDto(UUID.randomUUID(), "P", 3, BigDecimal.valueOf(300.0));
             given(productService.addProduct(req)).willReturn(dto);
 
             mvc.perform(post("/shop/api/v1/addProduct")
@@ -280,8 +282,8 @@ class ShopControllerTest {
         @DisplayName("PUT /updateProduct/{id} → 200")
         void update_ok() throws Exception {
             UUID id = UUID.randomUUID();
-            var req = new ProductDtoRequest("L", 2, 200.0);
-            var out = new ProductDto(id, "L", 2, 200.0);
+            var req = new ProductDtoRequest("L", 2, BigDecimal.valueOf(200.0));
+            var out = new ProductDto(id, "L", 2, BigDecimal.valueOf(200.0));
             given(productService.updateProduct(id, req)).willReturn(out);
 
             mvc.perform(put("/shop/api/v1/updateProduct/{id}", id)
@@ -297,7 +299,7 @@ class ShopControllerTest {
         @DisplayName("PUT /updateProduct/{id} → 404")
         void update_notFound() throws Exception {
             UUID id = UUID.randomUUID();
-            var req = new ProductDtoRequest("T", 1, 10.0);
+            var req = new ProductDtoRequest("T", 1, BigDecimal.valueOf(10.0));
             given(productService.updateProduct(id, req))
                     .willThrow(new ProductNotFoundException("Missing"));
 

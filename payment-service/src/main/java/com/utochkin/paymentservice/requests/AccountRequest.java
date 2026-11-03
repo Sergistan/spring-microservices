@@ -8,6 +8,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @Data
@@ -19,7 +20,7 @@ public class AccountRequest {
 
     @NotNull
     @Positive
-    private Double totalAmount;
+    private BigDecimal totalAmount;
 
     @NotEmpty
     @Pattern(

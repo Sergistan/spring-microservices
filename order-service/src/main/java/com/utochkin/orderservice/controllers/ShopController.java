@@ -7,6 +7,7 @@ import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
+import java.math.BigDecimal;
 import java.util.List;
 //@FeignClient(name = "shop-service", url = "http://localhost:8072/shop/api/v1")
 @FeignClient(name = "shop-service", url = "http://getaway-server:8072/shop/api/v1")
@@ -16,7 +17,7 @@ public interface ShopController {
     Boolean checkOrder(@RequestBody List<OrderRequest> orderRequests);
 
     @PostMapping("/getSumTotalPriceOrder")
-    Double getSumTotalPriceOrder(@RequestBody List<OrderRequest> orderRequests);
+    BigDecimal getSumTotalPriceOrder(@RequestBody List<OrderRequest> orderRequests);
 
     @PostMapping("/changeTotalQuantityProductsAfterCreateOrder")
     void changeTotalQuantityProductsAfterCreateOrder(@RequestBody StockChangeRequest stockChangeRequest);

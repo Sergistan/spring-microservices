@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.util.Optional;
 
 @Repository
@@ -17,11 +18,11 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     @Modifying
     @Query("UPDATE Account a SET a.amountMoney = a.amountMoney - :amount " +
             "WHERE a.cardNumber = :cardNumber AND a.amountMoney >= :amount")
-    int withdraw(@Param("cardNumber") String cardNumber, @Param("amount") double amount);
+    int withdraw(@Param("cardNumber") String cardNumber, @Param("amount") BigDecimal amount);
 
     @Modifying
     @Query("UPDATE Account a SET a.amountMoney = a.amountMoney + :amount " +
             "WHERE a.cardNumber = :cardNumber")
-    int deposit(@Param("cardNumber") String cardNumber, @Param("amount") double amount);
+    int deposit(@Param("cardNumber") String cardNumber, @Param("amount") BigDecimal amount);
 }
 

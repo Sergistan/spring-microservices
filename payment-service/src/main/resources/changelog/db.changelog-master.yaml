@@ -8,3 +8,6 @@ databaseChangeLog:
   - include:
       file: /tables/create_table_payments.sql
       relativeToChangeLogFile: true
+  - include:
+      file: /tables/alter_columns_money_types.sql
+      relativeToChangeLogFile: true

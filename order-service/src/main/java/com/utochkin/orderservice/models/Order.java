@@ -9,6 +9,7 @@ import lombok.*;
 import org.springframework.format.annotation.DateTimeFormat;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.LinkedList;
 import java.util.List;
@@ -31,10 +32,10 @@ public class Order implements Serializable {
     @NotNull
     private UUID orderUuid;
 
-    @Column(name = "total_amount")
+    @Column(name = "total_amount", precision = 19, scale = 2)
     @NotNull
     @Positive
-    private Double totalAmount;
+    private BigDecimal totalAmount;
 
     @Enumerated(value = EnumType.STRING)
     private Status orderStatus;

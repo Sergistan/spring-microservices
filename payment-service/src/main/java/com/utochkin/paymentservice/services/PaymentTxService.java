@@ -15,6 +15,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -36,10 +38,11 @@ public class PaymentTxService {
                     return new CardNumberNotFoundException();
                 });
 
-        int withdrawn = accountRepository.withdraw(accountRequest.getCardNumber(), accountRequest.getTotalAmount());
+        BigDecimal amount = accountRequest.getTotalAmount().setScale(2, RoundingMode.HALF_UP);
+
+        int withdrawn = accountRepository.withdraw(accountRequest.getCardNumber(), amount);
         if (withdrawn == 0) {
-            log.info("PaymentTxService: недостаточно средств для списания {} с карты {}",
-                    accountRequest.getTotalAmount(), maskedCard);
+            log.info("PaymentTxService: недостаточно средств для списания {} с карты {}", amount, maskedCard);
             return new PaymentResponse(null, Status.FAILED);
         }
 
@@ -47,7 +50,7 @@ public class PaymentTxService {
                 .orderUuid(accountRequest.getOrderUuid())
                 .type(PaymentType.PAYMENT)
                 .cardNumber(accountRequest.getCardNumber())
-                .amount(accountRequest.getTotalAmount())
+                .amount(amount)
                 .paymentId(UUID.randomUUID())
                 .status(Status.SUCCESS)
                 .createdAt(LocalDateTime.now())
@@ -61,8 +64,7 @@ public class PaymentTxService {
             throw e;
         }
 
-        log.info("PaymentTxService: списание {} с карты {} успешно, paymentId={}",
-                accountRequest.getTotalAmount(), maskedCard, payment.getPaymentId());
+        log.info("PaymentTxService: списание {} с карты {} успешно, paymentId={}", amount, maskedCard, payment.getPaymentId());
         return new PaymentResponse(payment.getPaymentId(), Status.SUCCESS);
     }
 
@@ -87,13 +89,14 @@ public class PaymentTxService {
         accountRepository.findAccountByCardNumber(accountRequest.getCardNumber())
                 .orElseThrow(CardNumberNotFoundException::new);
 
-        accountRepository.deposit(accountRequest.getCardNumber(), originalPayment.getAmount());
+        BigDecimal refundAmount = originalPayment.getAmount();
+        accountRepository.deposit(accountRequest.getCardNumber(), refundAmount);
 
         Payment refund = Payment.builder()
                 .orderUuid(accountRequest.getOrderUuid())
                 .type(PaymentType.REFUND)
                 .cardNumber(accountRequest.getCardNumber())
-                .amount(originalPayment.getAmount())
+                .amount(refundAmount)
                 .paymentId(originalPayment.getPaymentId())
                 .status(Status.REFUNDED)
                 .createdAt(LocalDateTime.now())
@@ -107,8 +110,7 @@ public class PaymentTxService {
             throw e;
         }
 
-        log.info("PaymentTxService: возврат {} на карту {} успешно",
-                originalPayment.getAmount(), maskCard(accountRequest.getCardNumber()));
+        log.info("PaymentTxService: возврат {} на карту {} успешно", refundAmount, maskCard(accountRequest.getCardNumber()));
         return new PaymentResponse(originalPayment.getPaymentId(), Status.REFUNDED);
     }
 

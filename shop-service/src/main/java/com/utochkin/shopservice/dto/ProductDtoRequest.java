@@ -8,6 +8,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
@@ -25,5 +27,5 @@ public class ProductDtoRequest {
     @Schema(description = "Стоимость товара в магазине", example = "1000.0", type = "number", format = "double")
     @NotNull
     @Positive
-    private Double price;
+    private BigDecimal price;
 }

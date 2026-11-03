@@ -23,7 +23,7 @@ public class OrderDtoForKafka implements Serializable {
     private UUID orderUuid;
 
     @Positive
-    private Double totalAmount;
+    private java.math.BigDecimal totalAmount;
 
     private Status orderStatus;
 

@@ -81,7 +81,7 @@ class PaymentServiceApplicationTests {
         paymentRepository.deleteAll();
         accountRepository.save(Account.builder()
                 .cardNumber(EXISTING_CARD)
-                .amountMoney(500.0)
+                .amountMoney(java.math.BigDecimal.valueOf(500.0))
                 .build()
         );
     }
@@ -89,7 +89,7 @@ class PaymentServiceApplicationTests {
     @Test
     @DisplayName("POST /payment/api/v1/pay — SUCCESS когда достаточно средств")
     void pay_success() throws Exception {
-        var req = new AccountRequest(UUID.randomUUID(), 200.0, EXISTING_CARD);
+        var req = new AccountRequest(UUID.randomUUID(), java.math.BigDecimal.valueOf(200.0), EXISTING_CARD);
         mvc.perform(post("/payment/api/v1/pay")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))
@@ -98,14 +98,14 @@ class PaymentServiceApplicationTests {
                 .andExpect(jsonPath("$.paymentId").isNotEmpty());
 
         var acct = accountRepository.findAccountByCardNumber(EXISTING_CARD).get();
-        assertThat(acct.getAmountMoney()).isEqualTo(300.0);
+        assertThat(acct.getAmountMoney()).isEqualByComparingTo(java.math.BigDecimal.valueOf(300.0));
     }
 
     @Test
     @DisplayName("POST /payment/api/v1/pay — повторная оплата того же заказа не списывает деньги второй раз")
     void pay_sameOrderTwice_chargedOnce() throws Exception {
         UUID orderUuid = UUID.randomUUID();
-        var req = new AccountRequest(orderUuid, 200.0, EXISTING_CARD);
+        var req = new AccountRequest(orderUuid, java.math.BigDecimal.valueOf(200.0), EXISTING_CARD);
 
         mvc.perform(post("/payment/api/v1/pay")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -120,13 +120,13 @@ class PaymentServiceApplicationTests {
                 .andExpect(jsonPath("$.status").value("SUCCESS"));
 
         var acct = accountRepository.findAccountByCardNumber(EXISTING_CARD).get();
-        assertThat(acct.getAmountMoney()).isEqualTo(300.0);
+        assertThat(acct.getAmountMoney()).isEqualByComparingTo(java.math.BigDecimal.valueOf(300.0));
     }
 
     @Test
     @DisplayName("POST /payment/api/v1/pay — FAILED при недостаточности средств")
     void pay_insufficient() throws Exception {
-        var req = new AccountRequest(UUID.randomUUID(), 600.0, EXISTING_CARD);
+        var req = new AccountRequest(UUID.randomUUID(), java.math.BigDecimal.valueOf(600.0), EXISTING_CARD);
         mvc.perform(post("/payment/api/v1/pay")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))
@@ -135,13 +135,13 @@ class PaymentServiceApplicationTests {
                 .andExpect(jsonPath("$.paymentId").isEmpty());
 
         var acct = accountRepository.findAccountByCardNumber(EXISTING_CARD).get();
-        assertThat(acct.getAmountMoney()).isEqualTo(500.0);
+        assertThat(acct.getAmountMoney()).isEqualByComparingTo(java.math.BigDecimal.valueOf(500.0));
     }
 
     @Test
     @DisplayName("POST /payment/api/v1/pay — 404 когда карта не найдена")
     void pay_cardNotFound() throws Exception {
-        var req = new AccountRequest(UUID.randomUUID(), 100.0, MISSING_CARD);
+        var req = new AccountRequest(UUID.randomUUID(), java.math.BigDecimal.valueOf(100.0), MISSING_CARD);
         mvc.perform(post("/payment/api/v1/pay")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))
@@ -153,14 +153,14 @@ class PaymentServiceApplicationTests {
     @DisplayName("POST /payment/api/v1/refunded — REFUNDED после успешной оплаты, деньги возвращаются")
     void refunded_success() throws Exception {
         UUID orderUuid = UUID.randomUUID();
-        var payReq = new AccountRequest(orderUuid, 150.0, EXISTING_CARD);
+        var payReq = new AccountRequest(orderUuid, java.math.BigDecimal.valueOf(150.0), EXISTING_CARD);
         mvc.perform(post("/payment/api/v1/pay")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(payReq)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SUCCESS"));
 
-        var req = new AccountRequest(orderUuid, 150.0, EXISTING_CARD);
+        var req = new AccountRequest(orderUuid, java.math.BigDecimal.valueOf(150.0), EXISTING_CARD);
         mvc.perform(post("/payment/api/v1/refunded")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))
@@ -168,13 +168,13 @@ class PaymentServiceApplicationTests {
                 .andExpect(jsonPath("$.status").value("REFUNDED"));
 
         var acct = accountRepository.findAccountByCardNumber(EXISTING_CARD).get();
-        assertThat(acct.getAmountMoney()).isEqualTo(500.0);
+        assertThat(acct.getAmountMoney()).isEqualByComparingTo(java.math.BigDecimal.valueOf(500.0));
     }
 
     @Test
     @DisplayName("POST /payment/api/v1/refunded — 400 когда не найден платёж по заказу")
     void refunded_noPayment() throws Exception {
-        var req = new AccountRequest(UUID.randomUUID(), 50.0, EXISTING_CARD);
+        var req = new AccountRequest(UUID.randomUUID(), java.math.BigDecimal.valueOf(50.0), EXISTING_CARD);
         mvc.perform(post("/payment/api/v1/refunded")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))

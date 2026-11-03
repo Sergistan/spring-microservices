@@ -3,6 +3,7 @@ package com.utochkin.paymentservice.models;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -29,8 +30,8 @@ public class Payment {
     @Column(name = "card_number", nullable = false)
     private String cardNumber;
 
-    @Column(nullable = false)
-    private Double amount;
+    @Column(nullable = false, precision = 19, scale = 2)
+    private BigDecimal amount;
 
     @Column(name = "payment_id", nullable = false)
     private UUID paymentId;

@@ -67,7 +67,7 @@ public class HistoryServiceApplicationTests {
     void kafkaMessage_shouldSaveToMongo() {
         OrderDtoForKafka orderDto = new OrderDtoForKafka(
                 UUID.randomUUID(),
-                500.0,
+                java.math.BigDecimal.valueOf(500.0),
                 Status.SUCCESS,
                 LocalDateTime.now().minusHours(2),
                 LocalDateTime.now(),
@@ -94,7 +94,7 @@ public class HistoryServiceApplicationTests {
         UUID eventId = UUID.randomUUID();
         OrderDtoForKafka orderDto = new OrderDtoForKafka(
                 UUID.randomUUID(),
-                500.0,
+                java.math.BigDecimal.valueOf(500.0),
                 Status.SUCCESS,
                 LocalDateTime.now().minusHours(2),
                 LocalDateTime.now(),
