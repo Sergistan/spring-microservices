@@ -13,4 +13,10 @@ public class ExceptionControllerAdvice {
     public ErrorResponse handlerCardNumberNotFoundException(CardNumberNotFoundException cardNumberNotFoundException) {
         return new ErrorResponse(cardNumberNotFoundException.getMessage());
     }
+
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(RefundNotPossibleException.class)
+    public ErrorResponse handlerRefundNotPossibleException(RefundNotPossibleException refundNotPossibleException) {
+        return new ErrorResponse(refundNotPossibleException.getMessage());
+    }
 }

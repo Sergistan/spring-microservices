@@ -17,6 +17,6 @@ public class PaymentResponse {
     @Schema(description = "UUID заказа", example = "3f9edc4b-e4cf-4257-a485-72a147a0b45f", type = "string", format = "uuid")
     private UUID paymentId;
 
-    @Schema(description = "Статус заказа", example = "SUCCESS", allowableValues = {"WAITING_FOR_PAYMENT", "SUCCESS", "FAILED", "REFUNDED"})
+    @Schema(description = "Статус заказа", example = "SUCCESS", allowableValues = {"WAITING_FOR_PAYMENT", "PROCESSING", "SUCCESS", "FAILED", "REFUNDED"})
     private Status status;
 }

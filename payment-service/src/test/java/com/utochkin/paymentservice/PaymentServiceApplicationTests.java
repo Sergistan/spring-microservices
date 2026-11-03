@@ -8,6 +8,7 @@ import com.utochkin.paymentservice.exceptions.CustomAccessDeniedHandler;
 import com.utochkin.paymentservice.exceptions.ExceptionControllerAdvice;
 import com.utochkin.paymentservice.models.Account;
 import com.utochkin.paymentservice.repositories.AccountRepository;
+import com.utochkin.paymentservice.repositories.PaymentRepository;
 import com.utochkin.paymentservice.requests.AccountRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +25,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -63,6 +66,9 @@ class PaymentServiceApplicationTests {
     @Autowired
     private AccountRepository accountRepository;
 
+    @Autowired
+    private PaymentRepository paymentRepository;
+
     @MockitoBean
     private JwtDecoder jwtDecoder;
 
@@ -72,6 +78,7 @@ class PaymentServiceApplicationTests {
     @BeforeEach
     void setUp() {
         accountRepository.deleteAll();
+        paymentRepository.deleteAll();
         accountRepository.save(Account.builder()
                 .cardNumber(EXISTING_CARD)
                 .amountMoney(500.0)
@@ -82,7 +89,7 @@ class PaymentServiceApplicationTests {
     @Test
     @DisplayName("POST /payment/api/v1/pay — SUCCESS когда достаточно средств")
     void pay_success() throws Exception {
-        var req = new AccountRequest(200.0, EXISTING_CARD);
+        var req = new AccountRequest(UUID.randomUUID(), 200.0, EXISTING_CARD);
         mvc.perform(post("/payment/api/v1/pay")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))
@@ -95,9 +102,31 @@ class PaymentServiceApplicationTests {
     }
 
     @Test
+    @DisplayName("POST /payment/api/v1/pay — повторная оплата того же заказа не списывает деньги второй раз")
+    void pay_sameOrderTwice_chargedOnce() throws Exception {
+        UUID orderUuid = UUID.randomUUID();
+        var req = new AccountRequest(orderUuid, 200.0, EXISTING_CARD);
+
+        mvc.perform(post("/payment/api/v1/pay")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUCCESS"));
+
+        mvc.perform(post("/payment/api/v1/pay")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUCCESS"));
+
+        var acct = accountRepository.findAccountByCardNumber(EXISTING_CARD).get();
+        assertThat(acct.getAmountMoney()).isEqualTo(300.0);
+    }
+
+    @Test
     @DisplayName("POST /payment/api/v1/pay — FAILED при недостаточности средств")
     void pay_insufficient() throws Exception {
-        var req = new AccountRequest(600.0, EXISTING_CARD);
+        var req = new AccountRequest(UUID.randomUUID(), 600.0, EXISTING_CARD);
         mvc.perform(post("/payment/api/v1/pay")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))
@@ -112,7 +141,7 @@ class PaymentServiceApplicationTests {
     @Test
     @DisplayName("POST /payment/api/v1/pay — 404 когда карта не найдена")
     void pay_cardNotFound() throws Exception {
-        var req = new AccountRequest(100.0, MISSING_CARD);
+        var req = new AccountRequest(UUID.randomUUID(), 100.0, MISSING_CARD);
         mvc.perform(post("/payment/api/v1/pay")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))
@@ -121,9 +150,17 @@ class PaymentServiceApplicationTests {
     }
 
     @Test
-    @DisplayName("POST /payment/api/v1/refunded — REFUNDED когда карта существует")
+    @DisplayName("POST /payment/api/v1/refunded — REFUNDED после успешной оплаты, деньги возвращаются")
     void refunded_success() throws Exception {
-        var req = new AccountRequest(150.0, EXISTING_CARD);
+        UUID orderUuid = UUID.randomUUID();
+        var payReq = new AccountRequest(orderUuid, 150.0, EXISTING_CARD);
+        mvc.perform(post("/payment/api/v1/pay")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(payReq)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUCCESS"));
+
+        var req = new AccountRequest(orderUuid, 150.0, EXISTING_CARD);
         mvc.perform(post("/payment/api/v1/refunded")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))
@@ -131,18 +168,18 @@ class PaymentServiceApplicationTests {
                 .andExpect(jsonPath("$.status").value("REFUNDED"));
 
         var acct = accountRepository.findAccountByCardNumber(EXISTING_CARD).get();
-        assertThat(acct.getAmountMoney()).isEqualTo(650.0);
+        assertThat(acct.getAmountMoney()).isEqualTo(500.0);
     }
 
     @Test
-    @DisplayName("POST /payment/api/v1/refunded — 404 когда карта не найдена")
-    void refunded_cardNotFound() throws Exception {
-        var req = new AccountRequest(50.0, MISSING_CARD);
+    @DisplayName("POST /payment/api/v1/refunded — 400 когда не найден платёж по заказу")
+    void refunded_noPayment() throws Exception {
+        var req = new AccountRequest(UUID.randomUUID(), 50.0, EXISTING_CARD);
         mvc.perform(post("/payment/api/v1/refunded")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.messageError").value("Error: card number not found!"));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.messageError").value("Error: paid order not found, refund not possible!"));
     }
 }
 

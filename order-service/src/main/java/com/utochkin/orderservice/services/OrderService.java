@@ -29,6 +29,7 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
@@ -43,6 +44,9 @@ import static com.utochkin.orderservice.models.Status.REFUNDED;
 @Log4j2
 public class OrderService {
 
+    private static final List<Status> PAYABLE_STATUSES = List.of(Status.WAITING_FOR_PAYMENT, Status.FAILED, Status.PROCESSING);
+    private static final List<Status> REFUNDABLE_STATUSES = List.of(Status.SUCCESS);
+
     private final ShopController shopController;
     private final PaymentController paymentController;
     private final ProductInfoMapper productInfoMapper;
@@ -52,26 +56,27 @@ public class OrderService {
     private final OrderMapper orderMapper;
     private final AddressMapper addressMapper;
     private final KafkaSenderService kafkaSenderService;
+    private final TransactionTemplate transactionTemplate;
 
-    private void processPaymentResult(Order order, PaymentResponse paymentResponse) {
-        order.setOrderStatus(paymentResponse.getStatus());
-        order.setUpdatedAt(LocalDateTime.now());
-        order.setPaymentId(paymentResponse.getPaymentId());
-        Order savedOrder = orderRepository.save(order);
+    private OrderDtoForKafka finalizePaymentResult(UUID orderUuid, PaymentResponse paymentResponse) {
+        return transactionTemplate.execute(status -> {
+            Order order = orderRepository.findByOrderUuid(orderUuid).orElseThrow(OrderNotFoundException::new);
+            order.setOrderStatus(paymentResponse.getStatus());
+            order.setUpdatedAt(LocalDateTime.now());
+            order.setPaymentId(paymentResponse.getPaymentId());
+            Order savedOrder = orderRepository.save(order);
 
-        List<OrderRequest> orderRequests = savedOrder.getProductInfos().stream()
-                .map(productInfo -> new OrderRequest(productInfo.getArticleId(), productInfo.getQuantity()))
-                .toList();
+            List<OrderRequest> orderRequests = savedOrder.getProductInfos().stream()
+                    .map(productInfo -> new OrderRequest(productInfo.getArticleId(), productInfo.getQuantity()))
+                    .toList();
 
-        OrderDtoForKafka dto = orderMapper.toDtoForKafka(
-                savedOrder,
-                userMapper.toDto(savedOrder.getUser()),
-                addressMapper.toDto(savedOrder.getAddress()),
-                orderRequests
-        );
-        kafkaSenderService.send(dto);
-
-        log.info("OrderService: отправлено событие {} для заказа {}", paymentResponse.getStatus(), savedOrder.getOrderUuid());
+            return orderMapper.toDtoForKafka(
+                    savedOrder,
+                    userMapper.toDto(savedOrder.getUser()),
+                    addressMapper.toDto(savedOrder.getAddress()),
+                    orderRequests
+            );
+        });
     }
 
     @Transactional(readOnly = true)
@@ -124,7 +129,6 @@ public class OrderService {
         throw new ServiceUnavailableException("Сервис временно недоступен, пожалуйста, повторите попытку позже");
     }
 
-    @Transactional(noRollbackFor = FailedPayOrderException.class)
     @CircuitBreaker(name = "circuitBreakerPayOrder", fallbackMethod = "fallbackMethodPayOrder")
     @Retry(name = "retryPayOrder", fallbackMethod = "fallbackMethodPayOrder")
     public PaymentResponse paymentOrder(PaymentRequest paymentRequest) {
@@ -137,10 +141,20 @@ public class OrderService {
             case REFUNDED -> throw new FailedOrderStatusException("Заказ отменен, необходимо создать новый заказ!");
         }
 
-        Double totalAmountById = orderRepository.findTotalAmountByOrderUuid(paymentRequest.getOrderUuid());
-        PaymentResponse paymentResponse = paymentController.paymentOrder(new AccountRequest(totalAmountById, paymentRequest.getCardNumber()));
+        Integer acquired = transactionTemplate.execute(status ->
+                orderRepository.transitionStatus(paymentRequest.getOrderUuid(), PAYABLE_STATUSES, Status.PROCESSING));
+        if (acquired == null || acquired == 0) {
+            throw new FailedOrderStatusException("Заказ уже оплачен!");
+        }
 
-        processPaymentResult(order, paymentResponse);
+        Double totalAmountById = orderRepository.findTotalAmountByOrderUuid(paymentRequest.getOrderUuid());
+        PaymentResponse paymentResponse = paymentController.paymentOrder(new AccountRequest(
+                paymentRequest.getOrderUuid(), totalAmountById, paymentRequest.getCardNumber()));
+
+        OrderDtoForKafka dto = finalizePaymentResult(paymentRequest.getOrderUuid(), paymentResponse);
+        kafkaSenderService.send(dto);
+
+        log.info("OrderService: отправлено событие {} для заказа {}", paymentResponse.getStatus(), paymentRequest.getOrderUuid());
 
         if (paymentResponse.getStatus() == Status.FAILED) {
             throw new FailedPayOrderException();
@@ -156,7 +170,6 @@ public class OrderService {
     }
 
 
-    @Transactional
     @CircuitBreaker(name = "circuitBreakerRefundedOrder", fallbackMethod = "fallbackMethodRefundedOrder")
     @Retry(name = "retryRefundedOrder", fallbackMethod = "fallbackMethodRefundedOrder")
     public void refundedOrder(PaymentRequest paymentRequest) {
@@ -165,41 +178,46 @@ public class OrderService {
         Order order = orderRepository.findByOrderUuid(paymentRequest.getOrderUuid()).orElseThrow(OrderNotFoundException::new);
 
         switch (order.getOrderStatus()) {
-            case WAITING_FOR_PAYMENT, FAILED, REFUNDED ->
+            case WAITING_FOR_PAYMENT, PROCESSING, FAILED, REFUNDED ->
                     throw new FailedOrderStatusException("Заказ нельзя отменить, т.к. он не был оплачен!");
         }
 
+        Integer acquired = transactionTemplate.execute(status ->
+                orderRepository.transitionStatus(paymentRequest.getOrderUuid(), REFUNDABLE_STATUSES, Status.PROCESSING));
+        if (acquired == null || acquired == 0) {
+            throw new FailedOrderStatusException("Заказ нельзя отменить, т.к. он не был оплачен!");
+        }
+
         Double totalAmountById = orderRepository.findTotalAmountByOrderUuid(paymentRequest.getOrderUuid());
-        PaymentResponse refundedOrder = paymentController.refundedOrder(new AccountRequest(totalAmountById, paymentRequest.getCardNumber()));
+        PaymentResponse refundedOrder = paymentController.refundedOrder(new AccountRequest(
+                paymentRequest.getOrderUuid(), totalAmountById, paymentRequest.getCardNumber()));
 
         if (refundedOrder.getStatus() == REFUNDED) {
 
-            order.setOrderStatus(Status.REFUNDED);
-            order.setUpdatedAt(LocalDateTime.now());
-            order.setPaymentId(refundedOrder.getPaymentId());
+            OrderDtoForKafka dtoForKafka = transactionTemplate.execute(status -> {
+                Order fresh = orderRepository.findByOrderUuid(paymentRequest.getOrderUuid()).orElseThrow(OrderNotFoundException::new);
 
-            List<ProductInfo> productInfos = order.getProductInfos();
+                fresh.setOrderStatus(Status.REFUNDED);
+                fresh.setUpdatedAt(LocalDateTime.now());
+                fresh.setPaymentId(refundedOrder.getPaymentId());
 
-            List<OrderRequest> orderRequests = productInfos.stream()
-                    .map(productInfo -> {
-                        OrderRequest orderRequest = new OrderRequest();
-                        orderRequest.setArticleId(productInfo.getArticleId());
-                        orderRequest.setQuantity(productInfo.getQuantity());
-                        return orderRequest;
-                    })
-                    .toList();
+                List<ProductInfo> productInfos = fresh.getProductInfos();
 
-            shopController.changeTotalQuantityProductsAfterRefundedOrder(orderRequests);
+                List<OrderRequest> orderRequests = productInfos.stream()
+                        .map(productInfo -> new OrderRequest(productInfo.getArticleId(), productInfo.getQuantity()))
+                        .toList();
 
-            order.setProductInfos(Collections.emptyList());
+                shopController.changeTotalQuantityProductsAfterRefundedOrder(orderRequests);
 
-            List<Long> productIds = productInfos.stream().map(ProductInfo::getId).toList();
+                fresh.setProductInfos(Collections.emptyList());
 
-            productInfoRepository.deleteAllById(productIds);
+                List<Long> productIds = productInfos.stream().map(ProductInfo::getId).toList();
+                productInfoRepository.deleteAllById(productIds);
 
-            Order saveOrder = orderRepository.save(order);
+                Order savedOrder = orderRepository.save(fresh);
 
-            OrderDtoForKafka dtoForKafka = orderMapper.toDtoForKafka(saveOrder, userMapper.toDto(saveOrder.getUser()), addressMapper.toDto(order.getAddress()), orderRequests);
+                return orderMapper.toDtoForKafka(savedOrder, userMapper.toDto(savedOrder.getUser()), addressMapper.toDto(fresh.getAddress()), orderRequests);
+            });
 
             kafkaSenderService.send(dtoForKafka);
 
@@ -216,11 +234,11 @@ public class OrderService {
     private static void extractedFullbackMethod(PaymentRequest paymentRequest, Throwable throwable) {
         if (throwable instanceof FeignException fe) {
             if (fe.status() == HttpStatus.NOT_FOUND.value()) {
-                log.warn("Карта {} не найдена в платёжном сервисе (404)", paymentRequest.getCardNumber());
+                log.warn("Карта {} не найдена в платёжном сервисе (404)", maskCard(paymentRequest.getCardNumber()));
                 throw new CardNumberNotFoundException();
             }
             if (fe.status() == HttpStatus.PAYMENT_REQUIRED.value()) {
-                log.warn("Недостаточно средств на карте {} (402)", paymentRequest.getCardNumber());
+                log.warn("Недостаточно средств на карте {} (402)", maskCard(paymentRequest.getCardNumber()));
                 throw new FailedPayOrderException();
             }
         }
@@ -230,6 +248,13 @@ public class OrderService {
                 throwable instanceof OrderNotFoundException) {
             throw (RuntimeException) throwable;
         }
+    }
+
+    private static String maskCard(String cardNumber) {
+        if (cardNumber == null || cardNumber.length() < 4) {
+            return "****";
+        }
+        return "**** **** **** " + cardNumber.substring(cardNumber.length() - 4);
     }
 }
 

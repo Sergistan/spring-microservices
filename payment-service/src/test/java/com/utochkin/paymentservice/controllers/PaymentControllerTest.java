@@ -56,7 +56,7 @@ public class PaymentControllerTest {
     @Test
     @DisplayName("POST /payment/api/v1/pay — 200, SUCCESS")
     void paymentOrder_Success() throws Exception {
-        AccountRequest req = new AccountRequest(100.0, "1111 2222 3333 4444");
+        AccountRequest req = new AccountRequest(UUID.randomUUID(), 100.0, "1111 2222 3333 4444");
         PaymentResponse resp = new PaymentResponse(UUID.randomUUID(), Status.SUCCESS);
 
         given(paymentService.paymentOrder(any(AccountRequest.class))).willReturn(resp);
@@ -73,7 +73,7 @@ public class PaymentControllerTest {
     @Test
     @DisplayName("POST /payment/api/v1/pay — 404, CardNumberNotFoundException")
     void paymentOrder_CardNotFound_NotFound() throws Exception {
-        AccountRequest req = new AccountRequest(50.0, "9999 8888 7777 6666");
+        AccountRequest req = new AccountRequest(UUID.randomUUID(), 50.0, "9999 8888 7777 6666");
 
         given(paymentService.paymentOrder(any(AccountRequest.class)))
                 .willThrow(new CardNumberNotFoundException());
@@ -89,7 +89,7 @@ public class PaymentControllerTest {
     @Test
     @DisplayName("POST /payment/api/v1/refunded — 200, REFUNDED")
     void refundedOrder_Success() throws Exception {
-        AccountRequest req = new AccountRequest(75.0, "1111 2222 3333 4444");
+        AccountRequest req = new AccountRequest(UUID.randomUUID(), 75.0, "1111 2222 3333 4444");
         PaymentResponse resp = new PaymentResponse(UUID.randomUUID(), Status.REFUNDED);
 
         given(paymentService.refundedOrder(any(AccountRequest.class))).willReturn(resp);
@@ -105,7 +105,7 @@ public class PaymentControllerTest {
     @Test
     @DisplayName("POST /payment/api/v1/refunded — 404, CardNumberNotFoundException")
     void refundedOrder_CardNotFound() throws Exception {
-        AccountRequest req = new AccountRequest(20.0, "0000 1111 2222 3333");
+        AccountRequest req = new AccountRequest(UUID.randomUUID(), 20.0, "0000 1111 2222 3333");
 
         given(paymentService.refundedOrder(any(AccountRequest.class)))
                 .willThrow(new CardNumberNotFoundException());

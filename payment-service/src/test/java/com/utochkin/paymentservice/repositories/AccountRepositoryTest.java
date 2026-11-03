@@ -69,4 +69,57 @@ public class AccountRepositoryTest {
         assertThat(maybe).isEmpty();
     }
 
+    @Test
+    @DisplayName("withdraw → при достаточном балансе атомарно уменьшает и возвращает 1")
+    void withdraw_sufficient_updatesBalance() {
+        persistAccount("4444 3333 2222 1111", 250.0);
+
+        int updated = accountRepository.withdraw("4444 3333 2222 1111", 100.0);
+        em.clear();
+
+        assertThat(updated).isEqualTo(1);
+        assertThat(accountRepository.findAccountByCardNumber("4444 3333 2222 1111"))
+                .get()
+                .extracting(Account::getAmountMoney)
+                .isEqualTo(150.0);
+    }
+
+    @Test
+    @DisplayName("withdraw → при недостаточном балансе не меняет баланс и возвращает 0")
+    void withdraw_insufficient_returnsZero() {
+        persistAccount("4444 3333 2222 1111", 50.0);
+
+        int updated = accountRepository.withdraw("4444 3333 2222 1111", 100.0);
+
+        assertThat(updated).isZero();
+        em.clear();
+        assertThat(accountRepository.findAccountByCardNumber("4444 3333 2222 1111"))
+                .get()
+                .extracting(Account::getAmountMoney)
+                .isEqualTo(50.0);
+    }
+
+    @Test
+    @DisplayName("withdraw → несуществующая карта возвращает 0")
+    void withdraw_unknownCard_returnsZero() {
+        persistAccount("4444 3333 2222 1111", 50.0);
+
+        assertThat(accountRepository.withdraw("0000 0000 0000 0000", 10.0)).isZero();
+    }
+
+    @Test
+    @DisplayName("deposit → атомарно увеличивает баланс и возвращает 1")
+    void deposit_increasesBalance() {
+        persistAccount("4444 3333 2222 1111", 250.0);
+
+        int updated = accountRepository.deposit("4444 3333 2222 1111", 75.0);
+        em.clear();
+
+        assertThat(updated).isEqualTo(1);
+        assertThat(accountRepository.findAccountByCardNumber("4444 3333 2222 1111"))
+                .get()
+                .extracting(Account::getAmountMoney)
+                .isEqualTo(325.0);
+    }
+
 }

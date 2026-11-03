@@ -144,7 +144,7 @@ class OrderServiceIntegrationTest {
         UUID orderUuid = createOrder(total);
 
         PaymentRequest payReq = new PaymentRequest(orderUuid, "1111 2222 3333 4444");
-        AccountRequest acct = new AccountRequest(total, payReq.getCardNumber());
+        AccountRequest acct = new AccountRequest(orderUuid, total, payReq.getCardNumber());
         UUID payId = UUID.randomUUID();
         given(paymentController.paymentOrder(acct))
                 .willReturn(new PaymentResponse(payId, Status.SUCCESS));
@@ -182,13 +182,39 @@ class OrderServiceIntegrationTest {
     }
 
     @Test
+    @DisplayName("Двойная оплата → вторая отклоняется с 400, повторного вызова payment нет")
+    void payOrder_twice_secondRejected() throws Exception {
+        double total = 250.5;
+        UUID orderUuid = createOrder(total);
+
+        PaymentRequest payReq = new PaymentRequest(orderUuid, "1111 2222 3333 4444");
+        AccountRequest acct = new AccountRequest(orderUuid, total, payReq.getCardNumber());
+        given(paymentController.paymentOrder(acct))
+                .willReturn(new PaymentResponse(UUID.randomUUID(), Status.SUCCESS));
+
+        mvc.perform(post("/order/api/v1/pay")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payReq)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUCCESS"));
+
+        mvc.perform(post("/order/api/v1/pay")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payReq)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.messageError").value("Заказ уже оплачен!"));
+
+        org.mockito.Mockito.verify(paymentController).paymentOrder(acct);
+    }
+
+    @Test
     @DisplayName("Отмена заказа → 200 + REFUNDED + Kafka‑сообщение")
     void refundedOrder_andKafka() throws Exception {
         double total = 300.0;
         UUID orderUuid = createOrder(total);
 
         PaymentRequest payReq = new PaymentRequest(orderUuid, "1111 2222 3333 4444");
-        AccountRequest acctPay = new AccountRequest(total, payReq.getCardNumber());
+        AccountRequest acctPay = new AccountRequest(orderUuid, total, payReq.getCardNumber());
         UUID payId = UUID.randomUUID();
         given(paymentController.paymentOrder(acctPay))
                 .willReturn(new PaymentResponse(payId, Status.SUCCESS));
@@ -200,7 +226,7 @@ class OrderServiceIntegrationTest {
                 .andExpect(jsonPath("$.status").value("SUCCESS"));
 
         PaymentRequest refundReq = new PaymentRequest(orderUuid, "9999 8888 7777 6666");
-        AccountRequest acctRefund = new AccountRequest(total, refundReq.getCardNumber());
+        AccountRequest acctRefund = new AccountRequest(orderUuid, total, refundReq.getCardNumber());
         UUID refundId = UUID.randomUUID();
         given(paymentController.refundedOrder(acctRefund))
                 .willReturn(new PaymentResponse(refundId, Status.REFUNDED));
