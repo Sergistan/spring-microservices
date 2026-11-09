@@ -30,7 +30,6 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.math.BigDecimal;
 import java.util.UUID;
 
 import static org.mockito.BDDMockito.*;

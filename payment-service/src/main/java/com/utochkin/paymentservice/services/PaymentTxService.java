@@ -74,16 +74,16 @@ public class PaymentTxService {
                 .orElseThrow(() -> {
                     log.error("PaymentTxService: не найден платёж по заказу {} — возврат невозможен",
                             accountRequest.getOrderUuid());
-                    return new RefundNotPossibleException("Error: paid order not found, refund not possible!");
+                    return new RefundNotPossibleException("Ошибка: оплаченный заказ не найден, возврат невозможен!");
                 });
 
         if (originalPayment.getStatus() != Status.SUCCESS) {
-            throw new RefundNotPossibleException("Error: order was not paid successfully, refund not possible!");
+            throw new RefundNotPossibleException("Ошибка: заказ не был успешно оплачен, возврат невозможен!");
         }
 
         if (!originalPayment.getCardNumber().equals(accountRequest.getCardNumber())) {
             log.warn("PaymentTxService: попытка возврата по заказу {} на другую карту", accountRequest.getOrderUuid());
-            throw new RefundNotPossibleException("Error: refund is only possible to the card used for payment!");
+            throw new RefundNotPossibleException("Ошибка: возврат возможен только на карту, с которой была оплата!");
         }
 
         accountRepository.findAccountByCardNumber(accountRequest.getCardNumber())

@@ -2,7 +2,7 @@ package com.utochkin.paymentservice.exceptions;
 
 public class RefundNotPossibleException extends RuntimeException {
     public RefundNotPossibleException() {
-        super("Error: refund not possible!");
+        super("Ошибка: возврат невозможен!");
     }
 
     public RefundNotPossibleException(String message) {

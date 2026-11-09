@@ -25,6 +25,7 @@ import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verifyNoInteractions;
+import java.math.BigDecimal;
 
 @ExtendWith(MockitoExtension.class)
 public class NotificationConsumerTest {
@@ -41,7 +42,7 @@ public class NotificationConsumerTest {
     private OrderDtoForKafka baseOrder() {
         return new OrderDtoForKafka(
                 UUID.randomUUID(),
-                java.math.BigDecimal.valueOf(123.45),
+                BigDecimal.valueOf(123.45),
                 Status.SUCCESS,
                 LocalDateTime.of(2025,7,1,10,0),
                 LocalDateTime.of(2025,7,1,10,5),

@@ -155,7 +155,7 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
-    @Cacheable(value = "products", key = "#pageable.pageNumber + '-' + #pageable.pageSize + '-' + #pageable.sort.toString()")
+    @Cacheable(value = "products", key = "#pageable.pageNumber + '-' + #pageable.pageSize + '-' + #pageable.sort.toString()", sync = true)
     public List<ProductDto> getAllProducts(Pageable pageable) {
         log.info("ProductService: получение всех продуктов {}", pageable);
         Page<Product> productsPage = productRepository.findAll(pageable);
@@ -163,7 +163,7 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
-    @Cacheable(value = "product", key = "#articleId")
+    @Cacheable(value = "product", key = "#articleId", sync = true)
     public ProductDto getProduct(UUID articleId) {
         log.info("ProductService: получение продукта {}", articleId);
         Product product = productRepository.findByArticleId(articleId).orElseThrow(() -> new ProductNotFoundException("Продукт с articleId " + articleId + " не найден"));
@@ -192,7 +192,7 @@ public class ProductService {
         if (productByArticleId.isPresent()) {
             productRepository.deleteByArticleId(articleId);
         } else {
-            throw new ProductNotFoundException("Not found this product!");
+            throw new ProductNotFoundException("Продукт не найден!");
         }
 
     }
@@ -214,7 +214,7 @@ public class ProductService {
             productRepository.save(product);
             return productMapper.toDto(product);
         } else {
-            throw new ProductNotFoundException("Not found this product!");
+            throw new ProductNotFoundException("Продукт не найден!");
         }
     }
 }

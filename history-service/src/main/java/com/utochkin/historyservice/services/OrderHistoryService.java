@@ -8,11 +8,14 @@ import com.utochkin.historyservice.repositories.ProcessedEventRepository;
 import lombok.AllArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 
 @Service
 @AllArgsConstructor
@@ -21,6 +24,7 @@ public class OrderHistoryService {
 
     private final OrderHistoryRepository orderHistoryRepository;
     private final ProcessedEventRepository processedEventRepository;
+    private final MongoTemplate mongoTemplate;
 
     @KafkaListener(topics = "topic-orders", groupId = "history-group")
     public void consume(OrderDtoForKafka orderDto) {
@@ -51,15 +55,11 @@ public class OrderHistoryService {
     }
 
     private void appendToHistory(OrderDtoForKafka orderDto) {
-        OrderHistory orderHistory = orderHistoryRepository
-                .findByUsername(orderDto.getUserDto().username())
-                .orElseGet(() -> {
-                    log.debug("OrderHistoryService: создаём новый OrderHistory для пользователя {}", orderDto.getUserDto().username());
-                    return new OrderHistory(orderDto.getUserDto().username(), new ArrayList<>());
-                });
-
-        orderHistory.getOrders().add(orderDto);
-        orderHistoryRepository.save(orderHistory);
-        log.info("OrderHistoryService: сохранена история заказа для пользователя {}", orderDto.getUserDto().username());
+        String username = orderDto.getUserDto().username();
+        mongoTemplate.upsert(
+                Query.query(Criteria.where("username").is(username)),
+                new Update().push("orders", orderDto),
+                OrderHistory.class);
+        log.info("OrderHistoryService: сохранена история заказа для пользователя {}", username);
     }
 }

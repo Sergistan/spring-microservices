@@ -18,6 +18,7 @@ import com.utochkin.orderservice.models.User;
 import com.utochkin.orderservice.repositories.OrderRepository;
 import com.utochkin.orderservice.repositories.ProductInfoRepository;
 import com.utochkin.orderservice.request.AccountRequest;
+import com.utochkin.orderservice.request.OrderPaymentsResponse;
 import com.utochkin.orderservice.request.OrderRequest;
 import com.utochkin.orderservice.request.PaymentRequest;
 import com.utochkin.orderservice.request.PaymentResponse;
@@ -33,6 +34,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -101,14 +103,16 @@ public class OrderService {
     public OrderDto createOrder(User user, UUID orderUuid, List<OrderRequest> orderRequests, AddressDto addressDto) {
         log.info("OrderService: начало создания заказа {} для user={} requests={}", orderUuid, user.getUsername(), orderRequests);
 
+        BigDecimal totalAmount = shopController.getSumTotalPriceOrder(orderRequests);
+
         try {
-            return transactionTemplate.execute(status -> {
+            transactionTemplate.executeWithoutResult(status -> {
                 Order order = Order.builder()
                         .orderUuid(orderUuid)
-                        .totalAmount(shopController.getSumTotalPriceOrder(orderRequests))
-                        .orderStatus(Status.WAITING_FOR_PAYMENT)
+                        .totalAmount(totalAmount)
+                        .orderStatus(Status.STOCK_PENDING)
                         .createdAt(LocalDateTime.now())
-                        .updatedAt(null)
+                        .updatedAt(LocalDateTime.now())
                         .address(addressMapper.toEntity(addressDto))
                         .user(user)
                         .paymentId(null)
@@ -119,19 +123,33 @@ public class OrderService {
                 List<ProductInfo> listEntity = productInfoMapper.toListEntity(orderRequests);
                 listEntity.forEach(productInfo -> productInfo.setOrder(savedOrder));
                 productInfoRepository.saveAll(listEntity);
-
-                shopController.changeTotalQuantityProductsAfterCreateOrder(
-                        new StockChangeRequest(orderUuid, orderRequests));
-
-                log.info("OrderService: заказ {} создан успешно", orderUuid);
-
-                return orderMapper.toDto(savedOrder, userMapper.toDto(user), addressDto, orderRequests);
             });
         } catch (DataIntegrityViolationException e) {
-            Order existing = orderRepository.findByOrderUuid(orderUuid).orElseThrow(() -> e);
             log.info("OrderService: заказ {} уже создан предыдущей попыткой — идемпотентный повтор", orderUuid);
-            return orderMapper.toDto(existing, userMapper.toDto(user), addressDto, orderRequests);
         }
+
+        finalizeStock(orderUuid, orderRequests);
+
+        Order result = orderRepository.findByOrderUuid(orderUuid).orElseThrow(OrderNotFoundException::new);
+        log.info("OrderService: заказ {} создан, статус {}", orderUuid, result.getOrderStatus());
+        return orderMapper.toDto(result, userMapper.toDto(user), addressDto, orderRequests);
+    }
+
+    public void finalizeStock(UUID orderUuid, List<OrderRequest> orderRequests) {
+        try {
+            shopController.changeTotalQuantityProductsAfterCreateOrder(new StockChangeRequest(orderUuid, orderRequests));
+        } catch (FeignException fe) {
+            if (fe.status() == HttpStatus.CONFLICT.value() || fe.status() == HttpStatus.NOT_FOUND.value()) {
+                transactionTemplate.executeWithoutResult(status ->
+                        orderRepository.transitionStatus(orderUuid, List.of(Status.STOCK_PENDING), Status.FAILED));
+                log.warn("OrderService: товар недоступен для заказа {} — заказ переведён в FAILED", orderUuid);
+                throw new ProductUnavailableException();
+            }
+            throw fe;
+        }
+        transactionTemplate.executeWithoutResult(status ->
+                orderRepository.transitionStatus(orderUuid, List.of(Status.STOCK_PENDING), Status.WAITING_FOR_PAYMENT));
+        log.info("OrderService: списание подтверждено, заказ {} переведён в WAITING_FOR_PAYMENT", orderUuid);
     }
 
     public void fallbackMethodCreateOrder(User user, UUID orderUuid, List<OrderRequest> orderRequests, AddressDto addressDto, Throwable throwable) {
@@ -158,6 +176,7 @@ public class OrderService {
         switch (order.getOrderStatus()) {
             case SUCCESS -> throw new FailedOrderStatusException("Заказ уже оплачен!");
             case REFUNDED -> throw new FailedOrderStatusException("Заказ отменен, необходимо создать новый заказ!");
+            case STOCK_PENDING -> throw new FailedOrderStatusException("Заказ ещё подтверждается, попробуйте позже");
         }
 
         Integer acquired = transactionTemplate.execute(status ->
@@ -166,7 +185,7 @@ public class OrderService {
             throw new FailedOrderStatusException("Заказ уже оплачен!");
         }
 
-        java.math.BigDecimal totalAmountById = orderRepository.findTotalAmountByOrderUuid(paymentRequest.getOrderUuid());
+        BigDecimal totalAmountById = orderRepository.findTotalAmountByOrderUuid(paymentRequest.getOrderUuid());
         PaymentResponse paymentResponse = paymentController.paymentOrder(new AccountRequest(
                 paymentRequest.getOrderUuid(), totalAmountById, paymentRequest.getCardNumber()));
 
@@ -194,7 +213,7 @@ public class OrderService {
         Order order = orderRepository.findByOrderUuid(paymentRequest.getOrderUuid()).orElseThrow(OrderNotFoundException::new);
 
         switch (order.getOrderStatus()) {
-            case WAITING_FOR_PAYMENT, PROCESSING, FAILED, REFUNDED ->
+            case STOCK_PENDING, WAITING_FOR_PAYMENT, PROCESSING, FAILED, REFUNDED ->
                     throw new FailedOrderStatusException("Заказ нельзя отменить, т.к. он не был оплачен!");
         }
 
@@ -204,7 +223,7 @@ public class OrderService {
             throw new FailedOrderStatusException("Заказ нельзя отменить, т.к. он не был оплачен!");
         }
 
-        java.math.BigDecimal totalAmountById = orderRepository.findTotalAmountByOrderUuid(paymentRequest.getOrderUuid());
+        BigDecimal totalAmountById = orderRepository.findTotalAmountByOrderUuid(paymentRequest.getOrderUuid());
         PaymentResponse refundedOrder = paymentController.refundedOrder(new AccountRequest(
                 paymentRequest.getOrderUuid(), totalAmountById, paymentRequest.getCardNumber()));
 
@@ -271,6 +290,94 @@ public class OrderService {
             return "****";
         }
         return "**** **** **** " + cardNumber.substring(cardNumber.length() - 4);
+    }
+
+    public void reconcile(Order order) {
+        if (order.getOrderStatus() == Status.STOCK_PENDING) {
+            log.info("OrderService: reconciliation: заказ {} в STOCK_PENDING — повторная попытка списания", order.getOrderUuid());
+            try {
+                finalizeStock(order.getOrderUuid(), toOrderRequests(order.getProductInfos()));
+            } catch (ProductUnavailableException e) {
+                log.warn("OrderService: reconciliation: товар для заказа {} недоступен — заказ переведён в FAILED", order.getOrderUuid());
+            }
+            return;
+        }
+        OrderPaymentsResponse payments = paymentController.getOrderPayments(order.getOrderUuid());
+        reconcileStuckOrder(order, payments);
+    }
+
+    private List<OrderRequest> toOrderRequests(List<ProductInfo> productInfos) {
+        return productInfos.stream()
+                .map(productInfo -> new OrderRequest(productInfo.getArticleId(), productInfo.getQuantity()))
+                .toList();
+    }
+
+    public void reconcileStuckOrder(Order order, OrderPaymentsResponse payments) {
+        if (payments.refunded()) {
+            finalizeReconciledRefund(order, payments);
+        } else if (payments.paid()) {
+            finalizeReconciledSuccess(order, payments);
+        } else {
+            Integer released = transactionTemplate.execute(status ->
+                    orderRepository.transitionStatus(order.getOrderUuid(), List.of(Status.PROCESSING), Status.WAITING_FOR_PAYMENT));
+            if (released != null && released > 0) {
+                log.info("OrderService: reconciliation: заказ {} без платежа — возвращён в WAITING_FOR_PAYMENT", order.getOrderUuid());
+            } else {
+                log.info("OrderService: reconciliation: заказ {} уже не в PROCESSING — пропущен", order.getOrderUuid());
+            }
+        }
+    }
+
+    private void finalizeReconciledSuccess(Order order, OrderPaymentsResponse payments) {
+        transactionTemplate.executeWithoutResult(status -> {
+            Order fresh = orderRepository.findByOrderUuid(order.getOrderUuid()).orElseThrow(OrderNotFoundException::new);
+            if (fresh.getOrderStatus() != Status.PROCESSING) {
+                status.setRollbackOnly();
+                return;
+            }
+            fresh.setOrderStatus(Status.SUCCESS);
+            fresh.setUpdatedAt(LocalDateTime.now());
+            fresh.setPaymentId(payments.paymentId());
+            Order savedOrder = orderRepository.save(fresh);
+            outboxService.saveToOutbox(toKafkaDto(savedOrder));
+            log.info("OrderService: reconciliation: заказ {} финализирован как SUCCESS, событие зафиксировано в outbox", order.getOrderUuid());
+        });
+    }
+
+    private void finalizeReconciledRefund(Order order, OrderPaymentsResponse payments) {
+        transactionTemplate.executeWithoutResult(status -> {
+            Order fresh = orderRepository.findByOrderUuid(order.getOrderUuid()).orElseThrow(OrderNotFoundException::new);
+            if (fresh.getOrderStatus() != Status.PROCESSING) {
+                status.setRollbackOnly();
+                return;
+            }
+
+            List<ProductInfo> productInfos = fresh.getProductInfos();
+            List<OrderRequest> orderRequests = toOrderRequests(productInfos);
+
+            shopController.changeTotalQuantityProductsAfterRefundedOrder(
+                    new StockChangeRequest(order.getOrderUuid(), orderRequests));
+
+            fresh.setOrderStatus(REFUNDED);
+            fresh.setUpdatedAt(LocalDateTime.now());
+            fresh.setPaymentId(payments.paymentId());
+            fresh.setProductInfos(Collections.emptyList());
+            productInfoRepository.deleteAllById(productInfos.stream().map(ProductInfo::getId).toList());
+
+            Order savedOrder = orderRepository.save(fresh);
+
+            OrderDtoForKafka dtoForKafka = orderMapper.toDtoForKafka(savedOrder, userMapper.toDto(savedOrder.getUser()), addressMapper.toDto(fresh.getAddress()), orderRequests);
+            outboxService.saveToOutbox(dtoForKafka);
+            log.info("OrderService: reconciliation: заказ {} финализирован как REFUNDED, событие зафиксировано в outbox", order.getOrderUuid());
+        });
+    }
+
+    private OrderDtoForKafka toKafkaDto(Order order) {
+        return orderMapper.toDtoForKafka(
+                order,
+                userMapper.toDto(order.getUser()),
+                addressMapper.toDto(order.getAddress()),
+                toOrderRequests(order.getProductInfos()));
     }
 }
 

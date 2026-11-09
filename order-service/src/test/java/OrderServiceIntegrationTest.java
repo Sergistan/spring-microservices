@@ -47,6 +47,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.BDDMockito.then;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import java.math.BigDecimal;
 
 @SpringBootTest(
         classes = OrderServiceApplication.class,
@@ -105,7 +106,7 @@ class OrderServiceIntegrationTest {
         UUID articleId = UUID.fromString("00000000-0000-0000-0000-000000000003");
         List<OrderRequest> req = List.of(new OrderRequest(articleId, 3));
         given(shopController.checkOrder(req)).willReturn(true);
-        given(shopController.getSumTotalPriceOrder(req)).willReturn(java.math.BigDecimal.valueOf(total));
+        given(shopController.getSumTotalPriceOrder(req)).willReturn(BigDecimal.valueOf(total));
 
         CompositeRequest cr = new CompositeRequest(req, new AddressDto("City", "Street", 10, 101));
         String json = objectMapper.writeValueAsString(cr);
@@ -131,7 +132,7 @@ class OrderServiceIntegrationTest {
         UUID articleId = UUID.fromString("00000000-0000-0000-0000-000000000003");
         List<OrderRequest> reqs = List.of(new OrderRequest(articleId, 3));
         given(shopController.checkOrder(reqs)).willReturn(true);
-        given(shopController.getSumTotalPriceOrder(reqs)).willReturn(java.math.BigDecimal.valueOf(250.5));
+        given(shopController.getSumTotalPriceOrder(reqs)).willReturn(BigDecimal.valueOf(250.5));
 
         CompositeRequest payload = new CompositeRequest(
                 reqs,
@@ -182,7 +183,7 @@ class OrderServiceIntegrationTest {
         UUID orderUuid = createOrder(total);
 
         PaymentRequest payReq = new PaymentRequest(orderUuid, "1111 2222 3333 4444");
-        AccountRequest acct = new AccountRequest(orderUuid, java.math.BigDecimal.valueOf(total).setScale(2), payReq.getCardNumber());
+        AccountRequest acct = new AccountRequest(orderUuid, BigDecimal.valueOf(total).setScale(2), payReq.getCardNumber());
         UUID payId = UUID.randomUUID();
         given(paymentController.paymentOrder(acct))
                 .willReturn(new PaymentResponse(payId, Status.SUCCESS));
@@ -216,7 +217,7 @@ class OrderServiceIntegrationTest {
         UUID orderUuid = createOrder(total);
 
         PaymentRequest payReq = new PaymentRequest(orderUuid, "1111 2222 3333 4444");
-        AccountRequest acct = new AccountRequest(orderUuid, java.math.BigDecimal.valueOf(total).setScale(2), payReq.getCardNumber());
+        AccountRequest acct = new AccountRequest(orderUuid, BigDecimal.valueOf(total).setScale(2), payReq.getCardNumber());
         given(paymentController.paymentOrder(acct))
                 .willReturn(new PaymentResponse(UUID.randomUUID(), Status.SUCCESS));
 
@@ -236,14 +237,14 @@ class OrderServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("Идемпотентное создание: повторная попытка с тем же orderUuid не создаёт дубль и не списывает остатки повторно")
+    @DisplayName("Идемпотентное создание: повторная попытка с тем же orderUuid не создаёт дубль; повторное списание — идемпотентный no-op на стороне shop")
     void createOrder_sameUuid_idempotentReplay() throws Exception {
         UUID articleId = UUID.fromString("00000000-0000-0000-0000-000000000009");
         List<OrderRequest> reqs = List.of(new OrderRequest(articleId, 2));
         UUID orderUuid = UUID.randomUUID();
 
         given(shopController.checkOrder(reqs)).willReturn(true);
-        given(shopController.getSumTotalPriceOrder(reqs)).willReturn(java.math.BigDecimal.valueOf(200.0));
+        given(shopController.getSumTotalPriceOrder(reqs)).willReturn(BigDecimal.valueOf(200.0));
 
         User user = User.builder().id(1L).username("login").subId("sub").build();
 
@@ -253,7 +254,7 @@ class OrderServiceIntegrationTest {
         assertThat(first.orderUuid()).isEqualTo(orderUuid);
         assertThat(second.orderUuid()).isEqualTo(orderUuid);
 
-        org.mockito.Mockito.verify(shopController, org.mockito.Mockito.times(1))
+        org.mockito.Mockito.verify(shopController, org.mockito.Mockito.times(2))
                 .changeTotalQuantityProductsAfterCreateOrder(
                         org.mockito.ArgumentMatchers.argThat(scr -> scr != null && orderUuid.equals(scr.getOrderUuid())));
     }
@@ -306,7 +307,7 @@ class OrderServiceIntegrationTest {
         UUID orderUuid = createOrder(total);
 
         PaymentRequest payReq = new PaymentRequest(orderUuid, "1111 2222 3333 4444");
-        AccountRequest acctPay = new AccountRequest(orderUuid, java.math.BigDecimal.valueOf(total).setScale(2), payReq.getCardNumber());
+        AccountRequest acctPay = new AccountRequest(orderUuid, BigDecimal.valueOf(total).setScale(2), payReq.getCardNumber());
         UUID payId = UUID.randomUUID();
         given(paymentController.paymentOrder(acctPay))
                 .willReturn(new PaymentResponse(payId, Status.SUCCESS));
@@ -318,7 +319,7 @@ class OrderServiceIntegrationTest {
                 .andExpect(jsonPath("$.status").value("SUCCESS"));
 
         PaymentRequest refundReq = new PaymentRequest(orderUuid, "9999 8888 7777 6666");
-        AccountRequest acctRefund = new AccountRequest(orderUuid, java.math.BigDecimal.valueOf(total).setScale(2), refundReq.getCardNumber());
+        AccountRequest acctRefund = new AccountRequest(orderUuid, BigDecimal.valueOf(total).setScale(2), refundReq.getCardNumber());
         UUID refundId = UUID.randomUUID();
         given(paymentController.refundedOrder(acctRefund))
                 .willReturn(new PaymentResponse(refundId, Status.REFUNDED));

@@ -24,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import java.math.BigDecimal;
 
 @ExtendWith(MockitoExtension.class)
 public class PaymentServiceTest {
@@ -43,7 +44,7 @@ public class PaymentServiceTest {
     @BeforeEach
     void setUp() {
         orderUuid = UUID.randomUUID();
-        request = new AccountRequest(orderUuid, java.math.BigDecimal.valueOf(100.0), "1234 5678 9012 3456");
+        request = new AccountRequest(orderUuid, BigDecimal.valueOf(100.0), "1234 5678 9012 3456");
     }
 
     private Payment payment(PaymentType type, Status status, UUID paymentId) {
@@ -51,7 +52,7 @@ public class PaymentServiceTest {
                 .orderUuid(orderUuid)
                 .type(type)
                 .cardNumber(request.getCardNumber())
-                .amount(java.math.BigDecimal.valueOf(100.0))
+                .amount(BigDecimal.valueOf(100.0))
                 .paymentId(paymentId)
                 .status(status)
                 .createdAt(LocalDateTime.now())

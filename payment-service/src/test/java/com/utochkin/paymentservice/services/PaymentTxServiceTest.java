@@ -28,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import java.math.BigDecimal;
 
 @ExtendWith(MockitoExtension.class)
 public class PaymentTxServiceTest {
@@ -47,14 +48,14 @@ public class PaymentTxServiceTest {
     @BeforeEach
     void setUp() {
         orderUuid = UUID.randomUUID();
-        request = new AccountRequest(orderUuid, java.math.BigDecimal.valueOf(100.0), "1234 5678 9012 3456");
+        request = new AccountRequest(orderUuid, BigDecimal.valueOf(100.0), "1234 5678 9012 3456");
     }
 
     private Account account() {
         return Account.builder()
                 .id(1L)
                 .cardNumber(request.getCardNumber())
-                .amountMoney(java.math.BigDecimal.valueOf(1000.0))
+                .amountMoney(BigDecimal.valueOf(1000.0))
                 .build();
     }
 
@@ -63,7 +64,7 @@ public class PaymentTxServiceTest {
                 .orderUuid(orderUuid)
                 .type(PaymentType.PAYMENT)
                 .cardNumber(request.getCardNumber())
-                .amount(java.math.BigDecimal.valueOf(100.0))
+                .amount(BigDecimal.valueOf(100.0))
                 .paymentId(UUID.randomUUID())
                 .status(status)
                 .createdAt(LocalDateTime.now())
@@ -75,7 +76,7 @@ public class PaymentTxServiceTest {
     void pay_successful() {
         when(accountRepository.findAccountByCardNumber(request.getCardNumber()))
                 .thenReturn(Optional.of(account()));
-        when(accountRepository.withdraw(request.getCardNumber(), java.math.BigDecimal.valueOf(100.0).setScale(2))).thenReturn(1);
+        when(accountRepository.withdraw(request.getCardNumber(), BigDecimal.valueOf(100.0).setScale(2))).thenReturn(1);
         when(paymentRepository.saveAndFlush(any(Payment.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
@@ -98,7 +99,7 @@ public class PaymentTxServiceTest {
     void pay_insufficientFunds_failed() {
         when(accountRepository.findAccountByCardNumber(request.getCardNumber()))
                 .thenReturn(Optional.of(account()));
-        when(accountRepository.withdraw(request.getCardNumber(), java.math.BigDecimal.valueOf(100.0).setScale(2))).thenReturn(0);
+        when(accountRepository.withdraw(request.getCardNumber(), BigDecimal.valueOf(100.0).setScale(2))).thenReturn(0);
 
         PaymentResponse response = paymentTxService.pay(request);
 
@@ -115,8 +116,8 @@ public class PaymentTxServiceTest {
 
         assertThatThrownBy(() -> paymentTxService.pay(request))
                 .isInstanceOf(CardNumberNotFoundException.class)
-                .hasMessageContaining("Error: card number not found");
-        verify(accountRepository, never()).withdraw(any(), any(java.math.BigDecimal.class));
+                .hasMessageContaining("Ошибка: карта с таким номером не найдена");
+        verify(accountRepository, never()).withdraw(any(), any(BigDecimal.class));
     }
 
     @Test
@@ -124,7 +125,7 @@ public class PaymentTxServiceTest {
     void pay_uniqueConflict_rethrows() {
         when(accountRepository.findAccountByCardNumber(request.getCardNumber()))
                 .thenReturn(Optional.of(account()));
-        when(accountRepository.withdraw(request.getCardNumber(), java.math.BigDecimal.valueOf(100.0).setScale(2))).thenReturn(1);
+        when(accountRepository.withdraw(request.getCardNumber(), BigDecimal.valueOf(100.0).setScale(2))).thenReturn(1);
         when(paymentRepository.saveAndFlush(any(Payment.class)))
                 .thenThrow(new DataIntegrityViolationException("duplicate"));
 
@@ -163,7 +164,7 @@ public class PaymentTxServiceTest {
 
         assertThatThrownBy(() -> paymentTxService.refund(request))
                 .isInstanceOf(RefundNotPossibleException.class);
-        verify(accountRepository, never()).deposit(any(), any(java.math.BigDecimal.class));
+        verify(accountRepository, never()).deposit(any(), any(BigDecimal.class));
     }
 
     @Test
@@ -174,7 +175,7 @@ public class PaymentTxServiceTest {
 
         assertThatThrownBy(() -> paymentTxService.refund(request))
                 .isInstanceOf(RefundNotPossibleException.class);
-        verify(accountRepository, never()).deposit(any(), any(java.math.BigDecimal.class));
+        verify(accountRepository, never()).deposit(any(), any(BigDecimal.class));
     }
 
     @Test
@@ -187,8 +188,8 @@ public class PaymentTxServiceTest {
 
         assertThatThrownBy(() -> paymentTxService.refund(request))
                 .isInstanceOf(RefundNotPossibleException.class)
-                .hasMessageContaining("only possible to the card used for payment");
-        verify(accountRepository, never()).deposit(any(), any(java.math.BigDecimal.class));
+                .hasMessageContaining("возврат возможен только на карту");
+        verify(accountRepository, never()).deposit(any(), any(BigDecimal.class));
     }
 
     @Test

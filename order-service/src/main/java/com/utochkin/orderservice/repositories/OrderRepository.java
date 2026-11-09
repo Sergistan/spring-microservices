@@ -8,7 +8,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -20,7 +22,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     Optional<Order> findByOrderUuid(UUID orderUuid);
 
-    @Modifying
+    List<Order> findTop50ByOrderStatusInAndUpdatedAtBefore(Collection<Status> orderStatuses, LocalDateTime updatedAtBefore);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE Order o SET o.orderStatus = :targetStatus, o.updatedAt = CURRENT_TIMESTAMP " +
             "WHERE o.orderUuid = :orderUuid AND o.orderStatus IN :allowedStatuses")
     int transitionStatus(@Param("orderUuid") UUID orderUuid,

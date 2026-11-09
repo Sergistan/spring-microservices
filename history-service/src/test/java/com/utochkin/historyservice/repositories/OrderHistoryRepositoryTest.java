@@ -18,6 +18,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import java.math.BigDecimal;
 
 @DataMongoTest
 @ActiveProfiles("test")
@@ -36,7 +37,7 @@ public class OrderHistoryRepositoryTest {
 
         orderDto = new OrderDtoForKafka(
                 UUID.randomUUID(),
-                java.math.BigDecimal.valueOf(120.0),
+                BigDecimal.valueOf(120.0),
                 Status.SUCCESS,
                 LocalDateTime.now().minusDays(1),
                 LocalDateTime.now(),
@@ -75,7 +76,7 @@ public class OrderHistoryRepositoryTest {
     void save_multipleOrders() {
         OrderDtoForKafka secondOrder = new OrderDtoForKafka(
                 UUID.randomUUID(),
-                java.math.BigDecimal.valueOf(230.0),
+                BigDecimal.valueOf(230.0),
                 Status.FAILED,
                 LocalDateTime.now().minusHours(2),
                 LocalDateTime.now(),

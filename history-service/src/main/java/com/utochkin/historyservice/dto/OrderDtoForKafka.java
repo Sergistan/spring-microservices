@@ -14,6 +14,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.math.BigDecimal;
 
 @Data
 @AllArgsConstructor
@@ -23,7 +24,7 @@ public class OrderDtoForKafka implements Serializable {
     private UUID orderUuid;
 
     @Positive
-    private java.math.BigDecimal totalAmount;
+    private BigDecimal totalAmount;
 
     private Status orderStatus;
 

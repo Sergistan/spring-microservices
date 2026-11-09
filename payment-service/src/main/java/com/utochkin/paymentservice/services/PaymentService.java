@@ -1,9 +1,11 @@
 package com.utochkin.paymentservice.services;
 
 import com.utochkin.paymentservice.exceptions.CardNumberNotFoundException;
+import com.utochkin.paymentservice.models.OrderPaymentsResponse;
 import com.utochkin.paymentservice.models.Payment;
 import com.utochkin.paymentservice.models.PaymentType;
 import com.utochkin.paymentservice.models.PaymentResponse;
+import com.utochkin.paymentservice.models.Status;
 import com.utochkin.paymentservice.repositories.PaymentRepository;
 import com.utochkin.paymentservice.requests.AccountRequest;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +14,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -20,6 +23,15 @@ public class PaymentService {
 
     private final PaymentTxService paymentTxService;
     private final PaymentRepository paymentRepository;
+
+    public OrderPaymentsResponse getOrderPayments(UUID orderUuid) {
+        Optional<Payment> payment = paymentRepository.findByOrderUuidAndType(orderUuid, PaymentType.PAYMENT);
+        boolean refunded = paymentRepository.findByOrderUuidAndType(orderUuid, PaymentType.REFUND).isPresent();
+        boolean paid = payment.map(p -> p.getStatus() == Status.SUCCESS).orElse(false);
+        UUID paymentId = payment.map(Payment::getPaymentId).orElse(null);
+        log.info("PaymentService: сводка платежей по заказу {}: paid={}, refunded={}", orderUuid, paid, refunded);
+        return new OrderPaymentsResponse(orderUuid, paid, refunded, paymentId);
+    }
 
     public PaymentResponse paymentOrder(AccountRequest accountRequest) {
         log.info("PaymentService: попытка списания {} с карты {} по заказу {}",

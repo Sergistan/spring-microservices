@@ -15,16 +15,20 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
+import java.math.BigDecimal;
 
 @ExtendWith(MockitoExtension.class)
 public class OutboxRelayTest {
@@ -38,12 +42,15 @@ public class OutboxRelayTest {
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
+    @Mock
+    private TransactionTemplate transactionTemplate;
+
     @InjectMocks
     private OutboxRelay outboxRelay;
 
     private OutboxEvent event(UUID eventId, UUID orderUuid) {
         OrderDtoForKafka dto = new OrderDtoForKafka(
-                orderUuid, java.math.BigDecimal.valueOf(100.0), com.utochkin.orderservice.models.Status.SUCCESS,
+                orderUuid, BigDecimal.valueOf(100.0), com.utochkin.orderservice.models.Status.SUCCESS,
                 LocalDateTime.now(), LocalDateTime.now(), null, null, null, UUID.randomUUID(), eventId);
         String payload;
         try {
@@ -66,6 +73,12 @@ public class OutboxRelayTest {
         lenient().when(result.getRecordMetadata()).thenReturn(mock(RecordMetadata.class));
         CompletableFuture<SendResult<String, Object>> success = CompletableFuture.completedFuture(result);
         lenient().when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(success);
+        lenient().doAnswer(invocation -> {
+                    Consumer<TransactionStatus> callback = invocation.getArgument(0);
+                    callback.accept(mock(TransactionStatus.class));
+                    return null;
+                })
+                .when(transactionTemplate).executeWithoutResult(any());
     }
 
     @Test
@@ -74,7 +87,7 @@ public class OutboxRelayTest {
         UUID eventId = UUID.randomUUID();
         UUID orderUuid = UUID.randomUUID();
         OutboxEvent outboxEvent = event(eventId, orderUuid);
-        when(outboxRepository.findTop100ByOrderByIdAsc()).thenReturn(List.of(outboxEvent));
+        when(outboxRepository.lockBatch()).thenReturn(List.of(outboxEvent));
 
         outboxRelay.pollOnce();
 
@@ -87,7 +100,7 @@ public class OutboxRelayTest {
     void pollOnce_sendFails_keepsRow() {
         UUID orderUuid = UUID.randomUUID();
         OutboxEvent outboxEvent = event(UUID.randomUUID(), orderUuid);
-        when(outboxRepository.findTop100ByOrderByIdAsc()).thenReturn(List.of(outboxEvent));
+        when(outboxRepository.lockBatch()).thenReturn(List.of(outboxEvent));
         CompletableFuture<SendResult<String, Object>> failed = new CompletableFuture<>();
         failed.completeExceptionally(new RuntimeException("broker unavailable"));
         when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(failed);
@@ -104,7 +117,7 @@ public class OutboxRelayTest {
         first.setId(1L);
         OutboxEvent second = event(UUID.randomUUID(), UUID.randomUUID());
         second.setId(2L);
-        when(outboxRepository.findTop100ByOrderByIdAsc()).thenReturn(List.of(first, second));
+        when(outboxRepository.lockBatch()).thenReturn(List.of(first, second));
         CompletableFuture<SendResult<String, Object>> failed = new CompletableFuture<>();
         failed.completeExceptionally(new RuntimeException("broker unavailable"));
         when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(failed);
@@ -120,7 +133,7 @@ public class OutboxRelayTest {
     @Test
     @DisplayName("pollOnce: пустой outbox — нет обращений к kafka")
     void pollOnce_emptyOutbox_noSends() {
-        when(outboxRepository.findTop100ByOrderByIdAsc()).thenReturn(List.of());
+        when(outboxRepository.lockBatch()).thenReturn(List.of());
 
         outboxRelay.pollOnce();
 

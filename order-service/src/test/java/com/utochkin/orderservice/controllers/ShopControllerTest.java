@@ -15,6 +15,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
+import java.math.BigDecimal;
 
 @ExtendWith(MockitoExtension.class)
 public class ShopControllerTest {
@@ -45,11 +46,11 @@ public class ShopControllerTest {
     void getSumTotalPriceOrder_ReturnsSum() {
         OrderRequest req = new OrderRequest(UUID.randomUUID(), 3);
         List<OrderRequest> requests = List.of(req);
-        given(shopController.getSumTotalPriceOrder(requests)).willReturn(java.math.BigDecimal.valueOf(123.45));
+        given(shopController.getSumTotalPriceOrder(requests)).willReturn(BigDecimal.valueOf(123.45));
 
-        java.math.BigDecimal sum = shopController.getSumTotalPriceOrder(requests);
+        BigDecimal sum = shopController.getSumTotalPriceOrder(requests);
 
-        assertThat(sum).isEqualByComparingTo(java.math.BigDecimal.valueOf(123.45));
+        assertThat(sum).isEqualByComparingTo(BigDecimal.valueOf(123.45));
 
         ArgumentCaptor<List<OrderRequest>> captor = ArgumentCaptor.forClass(List.class);
         verify(shopController).getSumTotalPriceOrder(captor.capture());

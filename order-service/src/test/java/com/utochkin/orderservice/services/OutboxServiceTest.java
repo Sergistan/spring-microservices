@@ -21,6 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import java.math.BigDecimal;
 
 @ExtendWith(MockitoExtension.class)
 public class OutboxServiceTest {
@@ -38,7 +39,7 @@ public class OutboxServiceTest {
 
     @BeforeEach
     void setUp() {
-        dto = new OrderDtoForKafka(UUID.randomUUID(), java.math.BigDecimal.valueOf(100.0),
+        dto = new OrderDtoForKafka(UUID.randomUUID(), BigDecimal.valueOf(100.0),
                 com.utochkin.orderservice.models.Status.SUCCESS,
                 LocalDateTime.now(),
                 LocalDateTime.now(),

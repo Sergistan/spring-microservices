@@ -38,6 +38,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import java.math.BigDecimal;
 
 
 @SpringBootTest(
@@ -92,7 +93,7 @@ class NotificationServiceApplicationTests {
     void kafkaPublish_triggersEmailService() throws Exception {
         OrderDtoForKafka order = new OrderDtoForKafka(
                 UUID.randomUUID(),
-                java.math.BigDecimal.valueOf(99.9),
+                BigDecimal.valueOf(99.9),
                 Status.SUCCESS,
                 LocalDateTime.now().minusMinutes(5),
                 LocalDateTime.now(),
@@ -124,7 +125,7 @@ class NotificationServiceApplicationTests {
 
         OrderDtoForKafka order = new OrderDtoForKafka(
                 UUID.randomUUID(),
-                java.math.BigDecimal.valueOf(99.9),
+                BigDecimal.valueOf(99.9),
                 Status.SUCCESS,
                 LocalDateTime.now().minusMinutes(5),
                 LocalDateTime.now(),

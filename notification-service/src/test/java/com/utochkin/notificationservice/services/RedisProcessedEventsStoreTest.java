@@ -6,6 +6,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
@@ -13,6 +14,7 @@ import java.time.Duration;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -69,6 +71,24 @@ public class RedisProcessedEventsStoreTest {
     void tryAcquire_nullEventId_trueWithoutRedis() {
         assertThat(store.tryAcquire(null)).isTrue();
         verifyNoInteractions(redisTemplate);
+    }
+
+    @Test
+    @DisplayName("tryAcquire: Redis недоступен — fail-open, true без блокировки обработки")
+    void tryAcquire_redisDown_failOpenReturnsTrue() {
+        when(redisTemplate.opsForValue()).thenThrow(new RedisConnectionFailureException("Connection refused"));
+
+        assertThat(store.tryAcquire(UUID.randomUUID())).isTrue();
+    }
+
+    @Test
+    @DisplayName("release: Redis недоступен — исключение не распространяется (fail-open)")
+    void release_redisDown_noException() {
+        UUID eventId = UUID.randomUUID();
+        when(redisTemplate.delete("notification:processed-event:" + eventId))
+                .thenThrow(new RedisConnectionFailureException("Connection refused"));
+
+        assertThatCode(() -> store.release(eventId)).doesNotThrowAnyException();
     }
 
     @Test

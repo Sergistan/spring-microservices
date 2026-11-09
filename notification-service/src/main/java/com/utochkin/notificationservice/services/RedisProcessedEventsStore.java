@@ -2,6 +2,7 @@ package com.utochkin.notificationservice.services;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -24,9 +25,14 @@ public class RedisProcessedEventsStore {
             return true;
         }
         String key = KEY_PREFIX + eventId;
-        Boolean claimed = redisTemplate.opsForValue().setIfAbsent(key, Instant.now().toString(), TTL);
-        log.debug("RedisProcessedEventsStore: tryAcquire {} -> {}", key, claimed);
-        return Boolean.TRUE.equals(claimed);
+        try {
+            Boolean claimed = redisTemplate.opsForValue().setIfAbsent(key, Instant.now().toString(), TTL);
+            log.debug("RedisProcessedEventsStore: tryAcquire {} -> {}", key, claimed);
+            return Boolean.TRUE.equals(claimed);
+        } catch (DataAccessException e) {
+            log.warn("RedisProcessedEventsStore: Redis недоступен ({}), дедупликация пропущена для {} — fail-open", e.getMessage(), key);
+            return true;
+        }
     }
 
     public void release(UUID eventId) {
@@ -34,7 +40,11 @@ public class RedisProcessedEventsStore {
             return;
         }
         String key = KEY_PREFIX + eventId;
-        Boolean deleted = redisTemplate.delete(key);
-        log.debug("RedisProcessedEventsStore: release {} -> {}", key, deleted);
+        try {
+            Boolean deleted = redisTemplate.delete(key);
+            log.debug("RedisProcessedEventsStore: release {} -> {}", key, deleted);
+        } catch (DataAccessException e) {
+            log.warn("RedisProcessedEventsStore: Redis недоступен при release ({}), ключ {} истечёт по TTL — fail-open", e.getMessage(), key);
+        }
     }
 }

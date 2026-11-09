@@ -26,6 +26,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import java.math.BigDecimal;
 
 @SpringBootTest(
         classes = HistoryServiceApplication.class,
@@ -67,7 +68,7 @@ public class HistoryServiceApplicationTests {
     void kafkaMessage_shouldSaveToMongo() {
         OrderDtoForKafka orderDto = new OrderDtoForKafka(
                 UUID.randomUUID(),
-                java.math.BigDecimal.valueOf(500.0),
+                BigDecimal.valueOf(500.0),
                 Status.SUCCESS,
                 LocalDateTime.now().minusHours(2),
                 LocalDateTime.now(),
@@ -94,7 +95,7 @@ public class HistoryServiceApplicationTests {
         UUID eventId = UUID.randomUUID();
         OrderDtoForKafka orderDto = new OrderDtoForKafka(
                 UUID.randomUUID(),
-                java.math.BigDecimal.valueOf(500.0),
+                BigDecimal.valueOf(500.0),
                 Status.SUCCESS,
                 LocalDateTime.now().minusHours(2),
                 LocalDateTime.now(),

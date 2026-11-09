@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import java.math.BigDecimal;
 
 @DataJpaTest(
         includeFilters = @ComponentScan.Filter(
@@ -44,7 +45,7 @@ public class ProductInfoRepositoryTest {
     void saveProductInfosForOrder() {
         Order order = Order.builder()
                 .orderUuid(UUID.randomUUID())
-                .totalAmount(java.math.BigDecimal.valueOf(50.0))
+                .totalAmount(BigDecimal.valueOf(50.0))
                 .orderStatus(Status.WAITING_FOR_PAYMENT)
                 .createdAt(LocalDateTime.now())
                 .build();

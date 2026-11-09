@@ -19,6 +19,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import java.math.BigDecimal;
 
 @DataJpaTest(
         includeFilters = @ComponentScan.Filter(
@@ -47,7 +48,7 @@ public class OrderRepositoryTest {
         UUID uuid = UUID.randomUUID();
         Order order = Order.builder()
                 .orderUuid(uuid)
-                .totalAmount(java.math.BigDecimal.valueOf(150.0))
+                .totalAmount(BigDecimal.valueOf(150.0))
                 .orderStatus(Status.WAITING_FOR_PAYMENT)
                 .createdAt(LocalDateTime.now())
                 .build();
@@ -56,7 +57,7 @@ public class OrderRepositoryTest {
 
         Optional<Order> found = orderRepo.findByOrderUuid(uuid);
         assertThat(found).isPresent();
-        assertThat(found.get().getTotalAmount()).isEqualByComparingTo(java.math.BigDecimal.valueOf(150.0));
+        assertThat(found.get().getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(150.0));
         assertThat(found.get().getOrderStatus()).isEqualTo(Status.WAITING_FOR_PAYMENT);
     }
 
@@ -66,21 +67,21 @@ public class OrderRepositoryTest {
         UUID uuid = UUID.randomUUID();
         Order order = Order.builder()
                 .orderUuid(uuid)
-                .totalAmount(java.math.BigDecimal.valueOf(321.99))
+                .totalAmount(BigDecimal.valueOf(321.99))
                 .orderStatus(Status.SUCCESS)
                 .createdAt(LocalDateTime.now())
                 .build();
 
         orderRepo.save(order);
 
-        java.math.BigDecimal total = orderRepo.findTotalAmountByOrderUuid(uuid);
-        assertThat(total).isEqualByComparingTo(java.math.BigDecimal.valueOf(321.99));
+        BigDecimal total = orderRepo.findTotalAmountByOrderUuid(uuid);
+        assertThat(total).isEqualByComparingTo(BigDecimal.valueOf(321.99));
     }
 
     @Test
     @DisplayName("findTotalAmountByOrderUuid возвращает null, если нет")
     void findTotalAmountForMissing() {
-        java.math.BigDecimal total = orderRepo.findTotalAmountByOrderUuid(UUID.randomUUID());
+        BigDecimal total = orderRepo.findTotalAmountByOrderUuid(UUID.randomUUID());
         assertThat(total).isNull();
     }
 
@@ -90,7 +91,7 @@ public class OrderRepositoryTest {
         UUID uuid = UUID.randomUUID();
         orderRepo.save(Order.builder()
                 .orderUuid(uuid)
-                .totalAmount(java.math.BigDecimal.valueOf(100.0))
+                .totalAmount(BigDecimal.valueOf(100.0))
                 .orderStatus(Status.WAITING_FOR_PAYMENT)
                 .createdAt(LocalDateTime.now())
                 .build());
@@ -113,7 +114,7 @@ public class OrderRepositoryTest {
         UUID uuid = UUID.randomUUID();
         orderRepo.save(Order.builder()
                 .orderUuid(uuid)
-                .totalAmount(java.math.BigDecimal.valueOf(100.0))
+                .totalAmount(BigDecimal.valueOf(100.0))
                 .orderStatus(Status.PROCESSING)
                 .createdAt(LocalDateTime.now())
                 .build());
@@ -131,7 +132,7 @@ public class OrderRepositoryTest {
         UUID uuid = UUID.randomUUID();
         orderRepo.save(Order.builder()
                 .orderUuid(uuid)
-                .totalAmount(java.math.BigDecimal.valueOf(100.0))
+                .totalAmount(BigDecimal.valueOf(100.0))
                 .orderStatus(Status.SUCCESS)
                 .createdAt(LocalDateTime.now())
                 .build());
@@ -154,7 +155,7 @@ public class OrderRepositoryTest {
         UUID uuid = UUID.randomUUID();
         orderRepo.save(Order.builder()
                 .orderUuid(uuid)
-                .totalAmount(java.math.BigDecimal.valueOf(100.0))
+                .totalAmount(BigDecimal.valueOf(100.0))
                 .orderStatus(Status.PROCESSING)
                 .createdAt(LocalDateTime.now())
                 .build());
