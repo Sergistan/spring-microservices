@@ -110,15 +110,16 @@ public class ReactiveConfig {
     @Bean
     @Order(2)
     public SecurityWebFilterChain resourceServerChain(ServerHttpSecurity http) {
-        // Осознанный набор маршрутов (см. routes в config-repo): order/shop требуют JWT.
-        // /payment/api/v1/** пока вне цепочки — через него ходят фоновые Feign-вызовы
-        // ReconciliationJob без пользовательского токена; закрывается на этапе A1 вместе
-        // с переводом внутренних вызовов на прямые адреса + сервисный токен.
+        // Все api-маршруты (order/shop/payment) требуют JWT: внутренние вызовы order-service
+        // ходят напрямую через Eureka с собственным Authorization (пользовательский JWT или
+        // сервисный токен client_credentials из ServiceTokenClient), поэтому маршрут /payment
+        // больше не нужен фоновым задачам и закрыт для анонимных внешних клиентов.
         // Docs-маршруты (/order/v3/api-docs и т.п.) открыты — это метаданные swagger-ui за oauth2Login.
         http
                 .securityMatcher(pathMatchers(
                         "/order/api/v1/**",
-                        "/shop/api/v1/**"
+                        "/shop/api/v1/**",
+                        "/payment/api/v1/**"
                 ))
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .authorizeExchange(ex -> ex

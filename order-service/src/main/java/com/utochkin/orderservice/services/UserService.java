@@ -38,7 +38,7 @@ public class UserService {
                 .firstName(firstName)
                 .lastName(lastName)
                 .email(email)
-                .role(Role.valueOf(role))
+                .role(parseRole(role))
                 .build();
 
         User savedUser = userRepository.save(user);
@@ -46,5 +46,14 @@ public class UserService {
         log.info("UserService: пользователь {} создан", savedUser.getUsername());
 
         return savedUser;
+    }
+
+    private Role parseRole(String role) {
+        try {
+            return Role.valueOf(role);
+        } catch (IllegalArgumentException | NullPointerException e) {
+            log.warn("UserService: некорректная роль '{}' — используем USER по умолчанию", role);
+            return Role.USER;
+        }
     }
 }

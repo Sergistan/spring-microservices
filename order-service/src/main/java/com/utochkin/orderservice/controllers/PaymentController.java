@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import java.util.UUID;
 
 //@FeignClient(name = "payment-service", url = "http://localhost:8072/payment/api/v1")
-@FeignClient(name = "payment-service", url = "http://getaway-server:8072/payment/api/v1")
+@FeignClient(name = "payment-service", path = "/payment/api/v1")
 public interface PaymentController {
 
     @PostMapping("/pay")

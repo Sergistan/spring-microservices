@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import java.math.BigDecimal;
 import java.util.List;
 //@FeignClient(name = "shop-service", url = "http://localhost:8072/shop/api/v1")
-@FeignClient(name = "shop-service", url = "http://getaway-server:8072/shop/api/v1")
+@FeignClient(name = "shop-service", path = "/shop/api/v1")
 public interface ShopController {
 
     @PostMapping("/checkOrder")
