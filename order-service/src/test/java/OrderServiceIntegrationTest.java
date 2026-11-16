@@ -209,6 +209,7 @@ class OrderServiceIntegrationTest {
         String payJson = objectMapper.writeValueAsString(payReq);
         mvc.perform(post("/order/api/v1/pay")
                         .with(jwt())
+                        .header("X-User-SubId", "sub")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payJson))
                 .andExpect(status().isOk())
@@ -242,6 +243,7 @@ class OrderServiceIntegrationTest {
 
         mvc.perform(post("/order/api/v1/pay")
                         .with(jwt())
+                        .header("X-User-SubId", "sub")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payReq)))
                 .andExpect(status().isOk())
@@ -249,6 +251,7 @@ class OrderServiceIntegrationTest {
 
         mvc.perform(post("/order/api/v1/pay")
                         .with(jwt())
+                        .header("X-User-SubId", "sub")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payReq)))
                 .andExpect(status().isBadRequest())
@@ -337,6 +340,7 @@ class OrderServiceIntegrationTest {
 
         mvc.perform(post("/order/api/v1/pay")
                         .with(jwt())
+                        .header("X-User-SubId", "sub")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payReq)))
                 .andExpect(status().isOk())
@@ -350,6 +354,7 @@ class OrderServiceIntegrationTest {
 
         mvc.perform(post("/order/api/v1/refunded")
                         .with(jwt())
+                        .header("X-User-SubId", "sub")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(refundReq)))
                 .andExpect(status().isOk())
@@ -363,5 +368,23 @@ class OrderServiceIntegrationTest {
                     assertThat(entry.key()).isEqualTo(orderUuid.toString());
                     assertThat(entry.value()).contains("\"orderStatus\":\"REFUNDED\"");
                 });
+    }
+
+    @Test
+    @DisplayName("IDOR: чужой X-User-SubId не может оплатить заказ — 403, статус не меняется")
+    void payOrder_foreignSubId_forbidden() throws Exception {
+        UUID orderUuid = createOrder(150.0);
+
+        PaymentRequest payReq = new PaymentRequest(orderUuid, "1111 2222 3333 4444");
+
+        mvc.perform(post("/order/api/v1/pay")
+                        .with(jwt())
+                        .header("X-User-SubId", "someone-else")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payReq)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.messageError").value("Ошибка: заказ принадлежит другому пользователю"));
+
+        then(paymentController).should(never()).paymentOrder(any());
     }
 }

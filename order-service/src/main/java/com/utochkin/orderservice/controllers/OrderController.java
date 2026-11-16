@@ -85,10 +85,11 @@ public class OrderController {
             @ApiResponse(responseCode = "404", description = "Не найдено", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "500", description = "Ошибка сервера", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
     })
-    public ResponseEntity<?> paymentOrder(@RequestBody @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(schema = @Schema(implementation = PaymentRequest.class),
+    public ResponseEntity<?> paymentOrder(@Parameter(hidden = true) @RequestHeader("X-User-SubId") String subId,
+                                          @RequestBody @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(schema = @Schema(implementation = PaymentRequest.class),
             encoding = @Encoding(contentType = "application/json")),
             description = "Ввод uuid заказа и номера карты для оплаты заказа", required = true) @Valid PaymentRequest paymentRequest) {
-        return new ResponseEntity<>(orderService.paymentOrder(paymentRequest), HttpStatus.OK);
+        return new ResponseEntity<>(orderService.paymentOrder(paymentRequest, subId), HttpStatus.OK);
     }
 
     @PostMapping("/refunded")
@@ -101,10 +102,11 @@ public class OrderController {
             @ApiResponse(responseCode = "404", description = "Не найдено", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "500", description = "Ошибка сервера", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
     })
-    public ResponseEntity<?> refundedOrder(@RequestBody @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(schema = @Schema(implementation = PaymentRequest.class),
+    public ResponseEntity<?> refundedOrder(@Parameter(hidden = true) @RequestHeader("X-User-SubId") String subId,
+                                           @RequestBody @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(schema = @Schema(implementation = PaymentRequest.class),
             encoding = @Encoding(contentType = "application/json")),
             description = "Ввод uuid заказа и номера карты для отмены заказа", required = true) @Valid PaymentRequest paymentRequest) {
-        orderService.refundedOrder(paymentRequest);
+        orderService.refundedOrder(paymentRequest, subId);
         return new ResponseEntity<>("Заказ успешно отменен", HttpStatus.OK);
     }
 

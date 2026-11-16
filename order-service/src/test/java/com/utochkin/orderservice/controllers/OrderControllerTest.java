@@ -132,10 +132,11 @@ public class OrderControllerTest {
         PaymentRequest req = new PaymentRequest(orderUuid, "1234 5678 9012 3456");
         PaymentResponse resp = new PaymentResponse(UUID.randomUUID(), Status.SUCCESS);
 
-        given(orderService.paymentOrder(req)).willReturn(resp);
+        given(orderService.paymentOrder(req, "sub")).willReturn(resp);
 
         mvc.perform(post("/order/api/v1/pay")
                         .with(jwt())
+                        .header("X-User-SubId", "sub")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req))
                 )
@@ -148,14 +149,32 @@ public class OrderControllerTest {
     @DisplayName("POST /order/api/v1/pay — 404, заказ не найден")
     void paymentOrder_NotFound() throws Exception {
         PaymentRequest req = new PaymentRequest(orderUuid, "1234 5678 9012 3456");
-        given(orderService.paymentOrder(req)).willThrow(new OrderNotFoundException());
+        given(orderService.paymentOrder(req, "sub")).willThrow(new OrderNotFoundException());
 
         mvc.perform(post("/order/api/v1/pay")
                         .with(jwt())
+                        .header("X-User-SubId", "sub")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req))
                 )
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("POST /order/api/v1/pay — 403, заказ чужого пользователя")
+    void paymentOrder_ForeignOwner_Forbidden() throws Exception {
+        PaymentRequest req = new PaymentRequest(orderUuid, "1234 5678 9012 3456");
+        given(orderService.paymentOrder(req, "sub"))
+                .willThrow(new com.utochkin.orderservice.exceptions.OrderAccessDeniedException());
+
+        mvc.perform(post("/order/api/v1/pay")
+                        .with(jwt())
+                        .header("X-User-SubId", "sub")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(req))
+                )
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.messageError").value("Ошибка: заказ принадлежит другому пользователю"));
     }
 
     @Test
@@ -165,6 +184,7 @@ public class OrderControllerTest {
 
         mvc.perform(post("/order/api/v1/refunded")
                         .with(jwt())
+                        .header("X-User-SubId", "sub")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req))
                 )
@@ -177,10 +197,11 @@ public class OrderControllerTest {
     void refundedOrder_NotFound() throws Exception {
         PaymentRequest req = new PaymentRequest(orderUuid, "1234 5678 9012 3456");
         willThrow(new OrderNotFoundException())
-                .given(orderService).refundedOrder(req);
+                .given(orderService).refundedOrder(req, "sub");
 
         mvc.perform(post("/order/api/v1/refunded")
                         .with(jwt())
+                        .header("X-User-SubId", "sub")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req))
                 )

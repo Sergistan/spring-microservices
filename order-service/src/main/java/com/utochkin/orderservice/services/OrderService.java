@@ -168,10 +168,15 @@ public class OrderService {
 
     @CircuitBreaker(name = "circuitBreakerPayOrder", fallbackMethod = "fallbackMethodPayOrder")
     @Retry(name = "retryPayOrder", fallbackMethod = "fallbackMethodPayOrder")
-    public PaymentResponse paymentOrder(PaymentRequest paymentRequest) {
+    public PaymentResponse paymentOrder(PaymentRequest paymentRequest, String subId) {
         log.info("OrderService: оплата заказа {}", paymentRequest.getOrderUuid());
 
         Order order = orderRepository.findByOrderUuid(paymentRequest.getOrderUuid()).orElseThrow(OrderNotFoundException::new);
+
+        if (!order.getUser().getSubId().equals(subId)) {
+            log.warn("OrderService: попытка оплатить заказ {} пользователем subId={}", paymentRequest.getOrderUuid(), subId);
+            throw new OrderAccessDeniedException();
+        }
 
         switch (order.getOrderStatus()) {
             case SUCCESS -> throw new FailedOrderStatusException("Заказ уже оплачен!");
@@ -198,7 +203,7 @@ public class OrderService {
         return paymentResponse;
     }
 
-    public PaymentResponse fallbackMethodPayOrder(PaymentRequest paymentRequest, Throwable throwable) {
+    public PaymentResponse fallbackMethodPayOrder(PaymentRequest paymentRequest, String subId, Throwable throwable) {
         extractedFullbackMethod(paymentRequest, throwable);
         log.error("Fallback для paymentOrder сработал из-за: {}", throwable.getMessage());
         throw new ServiceUnavailableException("Сервис временно недоступен, пожалуйста, повторите попытку позже");
@@ -207,10 +212,15 @@ public class OrderService {
 
     @CircuitBreaker(name = "circuitBreakerRefundedOrder", fallbackMethod = "fallbackMethodRefundedOrder")
     @Retry(name = "retryRefundedOrder", fallbackMethod = "fallbackMethodRefundedOrder")
-    public void refundedOrder(PaymentRequest paymentRequest) {
+    public void refundedOrder(PaymentRequest paymentRequest, String subId) {
         log.info("OrderService: возврат заказа {}", paymentRequest.getOrderUuid());
 
         Order order = orderRepository.findByOrderUuid(paymentRequest.getOrderUuid()).orElseThrow(OrderNotFoundException::new);
+
+        if (!order.getUser().getSubId().equals(subId)) {
+            log.warn("OrderService: попытка вернуть заказ {} пользователем subId={}", paymentRequest.getOrderUuid(), subId);
+            throw new OrderAccessDeniedException();
+        }
 
         switch (order.getOrderStatus()) {
             case STOCK_PENDING, WAITING_FOR_PAYMENT, PROCESSING, FAILED, REFUNDED ->
@@ -260,7 +270,7 @@ public class OrderService {
         }
     }
 
-    public void fallbackMethodRefundedOrder(PaymentRequest paymentRequest, Throwable throwable) {
+    public void fallbackMethodRefundedOrder(PaymentRequest paymentRequest, String subId, Throwable throwable) {
         extractedFullbackMethod(paymentRequest, throwable);
         log.error("Fallback для refundedOrder сработал из-за: {}", throwable.getMessage());
         throw new ServiceUnavailableException("Сервис временно недоступен, пожалуйста, повторите попытку позже");

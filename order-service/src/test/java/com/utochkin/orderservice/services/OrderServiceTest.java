@@ -8,6 +8,7 @@ import com.utochkin.orderservice.dto.OrderDtoForKafka;
 import com.utochkin.orderservice.dto.UserDto;
 import com.utochkin.orderservice.exceptions.FailedOrderStatusException;
 import com.utochkin.orderservice.exceptions.FailedPayOrderException;
+import com.utochkin.orderservice.exceptions.OrderAccessDeniedException;
 import com.utochkin.orderservice.exceptions.OrderNotFoundException;
 import com.utochkin.orderservice.exceptions.ProductUnavailableException;
 import com.utochkin.orderservice.exceptions.ServiceUnavailableException;
@@ -122,7 +123,7 @@ public class OrderServiceTest {
         order.setOrderStatus(Status.WAITING_FOR_PAYMENT);
         order.setCreatedAt(LocalDateTime.now());
         order.setProductInfos(productInfos);
-        order.setUser(new User());
+        order.setUser(User.builder().id(2L).subId("owner-sub").username("bob").build());
         order.setAddress(new Address());
 
 
@@ -250,7 +251,7 @@ public class OrderServiceTest {
 
         FailedOrderStatusException ex = assertThrows(
                 FailedOrderStatusException.class,
-                () -> orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"))
+                () -> orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"), "owner-sub")
         );
         assertThat(ex.getMessage()).isEqualTo("Заказ уже оплачен!");
 
@@ -268,7 +269,7 @@ public class OrderServiceTest {
 
         FailedOrderStatusException ex = assertThrows(
                 FailedOrderStatusException.class,
-                () -> orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"))
+                () -> orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"), "owner-sub")
         );
         assertThat(ex.getMessage()).isEqualTo("Заказ отменен, необходимо создать новый заказ!");
         then(paymentController).should(never()).paymentOrder(any());
@@ -282,7 +283,7 @@ public class OrderServiceTest {
 
         OrderNotFoundException ex = assertThrows(
                 OrderNotFoundException.class,
-                () -> orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"))
+                () -> orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"), "owner-sub")
         );
         assertThat(ex.getMessage()).isEqualTo("Ошибка: заказ не найден!");
     }
@@ -306,7 +307,7 @@ public class OrderServiceTest {
                         addrDto, new UserDto("bob", "", "", ""), orderRequests, success.getPaymentId(), UUID.randomUUID()
                 ));
 
-        PaymentResponse resp = orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"));
+        PaymentResponse resp = orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"), "owner-sub");
 
         assertThat(resp).isEqualTo(success);
         then(outboxService).should().saveToOutbox(any(OrderDtoForKafka.class));
@@ -332,7 +333,7 @@ public class OrderServiceTest {
                 ));
 
         assertThrows(FailedPayOrderException.class, () ->
-                orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"))
+                orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"), "owner-sub")
         );
         then(outboxService).should().saveToOutbox(any(OrderDtoForKafka.class));
     }
@@ -346,7 +347,7 @@ public class OrderServiceTest {
 
         FailedOrderStatusException ex = assertThrows(
                 FailedOrderStatusException.class,
-                () -> orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"))
+                () -> orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"), "owner-sub")
         );
         assertThat(ex.getMessage()).isEqualTo("Заказ уже оплачен!");
 
@@ -372,7 +373,7 @@ public class OrderServiceTest {
                         addrDto, new UserDto("bob", "", "", ""), orderRequests, success.getPaymentId(), UUID.randomUUID()
                 ));
 
-        PaymentResponse resp = orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"));
+        PaymentResponse resp = orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"), "owner-sub");
 
         assertThat(resp.getStatus()).isEqualTo(Status.SUCCESS);
         then(paymentController).should().paymentOrder(any());
@@ -383,7 +384,7 @@ public class OrderServiceTest {
     void refundedOrder_notFound_throws() {
         given(orderRepository.findByOrderUuid(uuid)).willReturn(Optional.empty());
         assertThrows(OrderNotFoundException.class,
-                () -> orderService.refundedOrder(new PaymentRequest(uuid, "5078 6038 0721 8893"))
+                () -> orderService.refundedOrder(new PaymentRequest(uuid, "5078 6038 0721 8893"), "owner-sub")
         );
     }
 
@@ -396,7 +397,7 @@ public class OrderServiceTest {
 
         FailedOrderStatusException ex = assertThrows(
                 FailedOrderStatusException.class,
-                () -> orderService.refundedOrder(new PaymentRequest(uuid, "5078 6038 0721 8893"))
+                () -> orderService.refundedOrder(new PaymentRequest(uuid, "5078 6038 0721 8893"), "owner-sub")
         );
         assertThat(ex.getMessage())
                 .isEqualTo("Заказ нельзя отменить, т.к. он не был оплачен!");
@@ -419,7 +420,7 @@ public class OrderServiceTest {
         PaymentResponse pr = new PaymentResponse(UUID.randomUUID(), Status.REFUNDED);
         given(paymentController.refundedOrder(any())).willReturn(pr);
 
-        orderService.refundedOrder(new PaymentRequest(uuid, "5078 6038 0721 8893"));
+        orderService.refundedOrder(new PaymentRequest(uuid, "5078 6038 0721 8893"), "owner-sub");
 
         then(shopController).should()
                 .changeTotalQuantityProductsAfterRefundedOrder(new StockChangeRequest(uuid,
@@ -442,7 +443,7 @@ public class OrderServiceTest {
 
         FailedOrderStatusException ex = assertThrows(
                 FailedOrderStatusException.class,
-                () -> orderService.refundedOrder(new PaymentRequest(uuid, "5078 6038 0721 8893"))
+                () -> orderService.refundedOrder(new PaymentRequest(uuid, "5078 6038 0721 8893"), "owner-sub")
         );
         assertThat(ex.getMessage()).isEqualTo("Заказ нельзя отменить, т.к. он не был оплачен!");
 
@@ -461,7 +462,7 @@ public class OrderServiceTest {
         PaymentResponse pr = new PaymentResponse(UUID.randomUUID(), Status.FAILED);
         given(paymentController.refundedOrder(any())).willReturn(pr);
 
-        orderService.refundedOrder(new PaymentRequest(uuid, "5078 6038 0721 8893"));
+        orderService.refundedOrder(new PaymentRequest(uuid, "5078 6038 0721 8893"), "owner-sub");
 
         then(shopController).should(never()).changeTotalQuantityProductsAfterRefundedOrder(any(StockChangeRequest.class));
         then(productInfoRepository).should(never()).deleteAllById(anyList());
@@ -552,7 +553,7 @@ public class OrderServiceTest {
 
         FailedOrderStatusException ex = assertThrows(
                 FailedOrderStatusException.class,
-                () -> orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"))
+                () -> orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"), "owner-sub")
         );
         assertThat(ex.getMessage()).isEqualTo("Заказ ещё подтверждается, попробуйте позже");
 
@@ -567,7 +568,7 @@ public class OrderServiceTest {
 
         FailedOrderStatusException ex = assertThrows(
                 FailedOrderStatusException.class,
-                () -> orderService.refundedOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"))
+                () -> orderService.refundedOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"), "owner-sub")
         );
         assertThat(ex.getMessage()).isEqualTo("Заказ нельзя отменить, т.к. он не был оплачен!");
 
@@ -612,5 +613,35 @@ public class OrderServiceTest {
 
         then(paymentController).should().getOrderPayments(uuid);
         then(orderRepository).should().transitionStatus(eq(uuid), eq(List.of(Status.PROCESSING)), eq(Status.WAITING_FOR_PAYMENT));
+    }
+
+    @Test
+    @DisplayName("paymentOrder: чужой subId → OrderAccessDeniedException, payment не вызывается")
+    void paymentOrder_foreignSubId_thrownAccessDenied() {
+        order.setOrderStatus(Status.WAITING_FOR_PAYMENT);
+
+        OrderAccessDeniedException ex = assertThrows(
+                OrderAccessDeniedException.class,
+                () -> orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"), "someone-else")
+        );
+        assertThat(ex.getMessage()).isEqualTo("Ошибка: заказ принадлежит другому пользователю");
+
+        then(paymentController).should(never()).paymentOrder(any());
+        then(orderRepository).should(never()).transitionStatus(any(), anyList(), any());
+    }
+
+    @Test
+    @DisplayName("refundedOrder: чужой subId → OrderAccessDeniedException, refund не вызывается")
+    void refundedOrder_foreignSubId_thrownAccessDenied() {
+        order.setOrderStatus(Status.SUCCESS);
+
+        OrderAccessDeniedException ex = assertThrows(
+                OrderAccessDeniedException.class,
+                () -> orderService.refundedOrder(new PaymentRequest(uuid, "5078 6038 0721 8893"), "someone-else")
+        );
+        assertThat(ex.getMessage()).isEqualTo("Ошибка: заказ принадлежит другому пользователю");
+
+        then(paymentController).should(never()).refundedOrder(any());
+        then(shopController).should(never()).changeTotalQuantityProductsAfterRefundedOrder(any(StockChangeRequest.class));
     }
 }

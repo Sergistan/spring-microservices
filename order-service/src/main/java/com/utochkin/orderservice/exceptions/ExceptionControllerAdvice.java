@@ -48,4 +48,10 @@ public class ExceptionControllerAdvice {
     public ErrorResponse handlerProductUnavailableException(ProductUnavailableException productUnavailableException) {
         return new ErrorResponse(productUnavailableException.getMessage());
     }
+
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    @ExceptionHandler(OrderAccessDeniedException.class)
+    public ErrorResponse handlerOrderAccessDeniedException(OrderAccessDeniedException orderAccessDeniedException) {
+        return new ErrorResponse(orderAccessDeniedException.getMessage());
+    }
 }
