@@ -40,6 +40,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
         properties = {
                 "spring.kafka.consumer.auto-offset-reset=earliest",
                 "spring.kafka.listener.missing-topics-fatal=false",
+                "spring.kafka.listener.ack-mode=MANUAL_IMMEDIATE",
                 "eureka.client.enabled=false",
                 "spring.cloud.discovery.enabled=false",
                 "spring.cloud.compatibility-verifier.enabled=false",

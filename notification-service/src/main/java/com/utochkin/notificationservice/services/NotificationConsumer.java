@@ -4,6 +4,7 @@ import com.utochkin.notificationservice.dto.OrderDtoForKafka;
 import lombok.AllArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Service;
 
 import java.util.stream.Collectors;
@@ -17,23 +18,26 @@ public class NotificationConsumer {
     private final RedisProcessedEventsStore processedEventsStore;
 
     @KafkaListener(topics = "topic-orders", groupId = "notification-group")
-    public void onOrderEvent(OrderDtoForKafka orderDto) {
+    public void onOrderEvent(OrderDtoForKafka orderDto, Acknowledgment ack) {
         log.info("NotificationConsumer: получено сообщение из Kafka: {}", orderDto);
 
         if (orderDto.getEventId() == null) {
             log.warn("NotificationConsumer: событие без eventId для заказа {} — обрабатываем без дедупликации", orderDto.getOrderUuid());
             sendNotification(orderDto);
+            ack.acknowledge();
             return;
         }
 
         if (!processedEventsStore.tryAcquire(orderDto.getEventId())) {
             log.info("NotificationConsumer: событие {} для заказа {} уже обработано — пропускаем (дедупликация)",
                     orderDto.getEventId(), orderDto.getOrderUuid());
+            ack.acknowledge();
             return;
         }
 
         try {
             sendNotification(orderDto);
+            ack.acknowledge();
         } catch (Exception e) {
             processedEventsStore.release(orderDto.getEventId());
             log.warn("NotificationConsumer: не удалось отправить уведомление для события {} — ключ дедупликации освобождён для повторной обработки",

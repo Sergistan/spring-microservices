@@ -13,6 +13,7 @@ import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -27,12 +28,13 @@ public class OrderHistoryService {
     private final MongoTemplate mongoTemplate;
 
     @KafkaListener(topics = "topic-orders", groupId = "history-group")
-    public void consume(OrderDtoForKafka orderDto) {
+    public void consume(OrderDtoForKafka orderDto, Acknowledgment ack) {
         log.info("OrderHistoryService: получено сообщение из Kafka: {}", orderDto);
 
         if (orderDto.getEventId() == null) {
             log.warn("OrderHistoryService: событие без eventId для заказа {} — обрабатываем без дедупликации", orderDto.getOrderUuid());
             appendToHistory(orderDto);
+            ack.acknowledge();
             return;
         }
 
@@ -41,11 +43,13 @@ public class OrderHistoryService {
         } catch (DuplicateKeyException e) {
             log.info("OrderHistoryService: событие {} для заказа {} уже обработано — пропускаем (дедупликация)",
                     orderDto.getEventId(), orderDto.getOrderUuid());
+            ack.acknowledge();
             return;
         }
 
         try {
             appendToHistory(orderDto);
+            ack.acknowledge();
         } catch (Exception e) {
             processedEventRepository.deleteById(orderDto.getEventId().toString());
             log.warn("OrderHistoryService: не удалось сохранить историю для события {} — маркер обработанности удалён для повторной обработки",

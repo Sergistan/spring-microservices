@@ -11,6 +11,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.kafka.support.Acknowledgment;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -36,6 +37,9 @@ public class NotificationConsumerTest {
     @Mock
     private RedisProcessedEventsStore processedEventsStore;
 
+    @Mock
+    private Acknowledgment ack;
+
     @InjectMocks
     private NotificationConsumer consumer;
 
@@ -60,7 +64,7 @@ public class NotificationConsumerTest {
         var order = baseOrder();
         given(processedEventsStore.tryAcquire(order.getEventId())).willReturn(true);
 
-        consumer.onOrderEvent(order);
+        consumer.onOrderEvent(order, ack);
 
         then(emailService).should()
                 .sendOrderNotification(
@@ -68,6 +72,7 @@ public class NotificationConsumerTest {
                         eq("Номер заказа " + order.getOrderUuid()),
                         any()
                 );
+        then(ack).should().acknowledge();
     }
 
     @Test
@@ -88,7 +93,7 @@ public class NotificationConsumerTest {
         );
         given(processedEventsStore.tryAcquire(order.getEventId())).willReturn(true);
 
-        consumer.onOrderEvent(order);
+        consumer.onOrderEvent(order, ack);
 
         then(emailService).should(never()).sendOrderNotification(any(),any(),any());
     }
@@ -99,10 +104,11 @@ public class NotificationConsumerTest {
         var order = baseOrder();
         given(processedEventsStore.tryAcquire(order.getEventId())).willReturn(false);
 
-        consumer.onOrderEvent(order);
+        consumer.onOrderEvent(order, ack);
 
         then(emailService).should(never()).sendOrderNotification(any(), any(), any());
         then(processedEventsStore).should(never()).release(any());
+        then(ack).should().acknowledge();
     }
 
     @Test
@@ -113,11 +119,12 @@ public class NotificationConsumerTest {
         doThrow(new RuntimeException("smtp down")).when(emailService)
                 .sendOrderNotification(anyString(), anyString(), anyString());
 
-        assertThatThrownBy(() -> consumer.onOrderEvent(order))
+        assertThatThrownBy(() -> consumer.onOrderEvent(order, ack))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage("smtp down");
 
         then(processedEventsStore).should().release(order.getEventId());
+        then(ack).should(never()).acknowledge();
     }
 
     @Test
@@ -126,9 +133,10 @@ public class NotificationConsumerTest {
         var order = baseOrder();
         order.setEventId(null);
 
-        consumer.onOrderEvent(order);
+        consumer.onOrderEvent(order, ack);
 
         verifyNoInteractions(processedEventsStore);
+        then(ack).should().acknowledge();
         then(emailService).should().sendOrderNotification(eq("john@doe.com"), any(), any());
     }
 

@@ -36,6 +36,7 @@ import java.math.BigDecimal;
                 "spring.mongodb.embedded.version=4.0.2",
                 "spring.kafka.consumer.auto-offset-reset=earliest",
                 "spring.kafka.listener.missing-topics-fatal=false",
+                "spring.kafka.listener.ack-mode=MANUAL_IMMEDIATE",
                 "eureka.client.enabled=false",
                 "spring.cloud.discovery.enabled=false",
                 "spring.cloud.compatibility-verifier.enabled=false",

@@ -14,6 +14,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.kafka.support.Acknowledgment;
 import org.bson.Document;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -45,6 +46,9 @@ class OrderHistoryServiceTest {
     @Mock
     private MongoTemplate mongoTemplate;
 
+    @Mock
+    private Acknowledgment ack;
+
     @InjectMocks
     private OrderHistoryService orderHistoryService;
 
@@ -71,7 +75,7 @@ class OrderHistoryServiceTest {
     void consume_upsertsWithPush() {
         doReturn(null).when(processedEventRepository).insert(any(ProcessedEvent.class));
 
-        orderHistoryService.consume(orderDto);
+        orderHistoryService.consume(orderDto, ack);
 
         ArgumentCaptor<Update> updateCaptor = ArgumentCaptor.forClass(Update.class);
         verify(mongoTemplate).upsert(any(Query.class), updateCaptor.capture(), eq(OrderHistory.class));
@@ -82,6 +86,8 @@ class OrderHistoryServiceTest {
                 .as("в $push по ключу orders лежит именно событие текущего заказа")
                 .isInstanceOfSatisfying(Document.class, pushDoc ->
                         assertThat(pushDoc.get("orders")).isEqualTo(orderDto));
+
+        verify(ack).acknowledge();
     }
 
     @Test
@@ -90,10 +96,11 @@ class OrderHistoryServiceTest {
         when(processedEventRepository.insert(any(ProcessedEvent.class)))
                 .thenThrow(new DuplicateKeyException("E11000 duplicate key error"));
 
-        assertThatCode(() -> orderHistoryService.consume(orderDto))
+        assertThatCode(() -> orderHistoryService.consume(orderDto, ack))
                 .doesNotThrowAnyException();
 
         verify(mongoTemplate, never()).upsert(any(Query.class), any(Update.class), any(Class.class));
+        verify(ack).acknowledge();
     }
 
     @Test
@@ -103,11 +110,12 @@ class OrderHistoryServiceTest {
         doThrow(new RuntimeException("mongo down")).when(mongoTemplate)
                 .upsert(any(Query.class), any(Update.class), eq(OrderHistory.class));
 
-        assertThatThrownBy(() -> orderHistoryService.consume(orderDto))
+        assertThatThrownBy(() -> orderHistoryService.consume(orderDto, ack))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage("mongo down");
 
         verify(processedEventRepository).deleteById(orderDto.getEventId().toString());
+        verify(ack, never()).acknowledge();
     }
 
     @Test
@@ -115,9 +123,10 @@ class OrderHistoryServiceTest {
     void consume_nullEventId_processedWithoutMarker() {
         orderDto.setEventId(null);
 
-        orderHistoryService.consume(orderDto);
+        orderHistoryService.consume(orderDto, ack);
 
         verify(processedEventRepository, never()).insert(any(ProcessedEvent.class));
         verify(mongoTemplate).upsert(any(Query.class), any(Update.class), eq(OrderHistory.class));
+        verify(ack).acknowledge();
     }
 }
