@@ -22,6 +22,7 @@ import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 //@Component
 //@Slf4j
@@ -111,14 +112,15 @@ public class JwtTokenFilter implements GlobalFilter, Ordered {
 
             log.info("JwtTokenFilter: authenticated user sub={} username={}", claims.get("sub"), claims.get("preferred_username"));
 
-            // Собираем мутированный запрос
+            // Собираем мутированный запрос (клиентские токены client_credentials не содержат
+            // пользовательских claim'ов, поэтому каждый claim извлекается null-safe)
             ServerHttpRequest mutatedReq = exchange.getRequest()
                     .mutate()
-                    .header("X-User-SubId", claims.get("sub").toString())
-                    .header("X-User-UserName", claims.get("preferred_username").toString())
-                    .header("X-User-FirstName", URLEncoder.encode(claims.get("given_name").toString(), StandardCharsets.UTF_8))
-                    .header("X-User-LastName", URLEncoder.encode(claims.get("family_name").toString(), StandardCharsets.UTF_8))
-                    .header("X-User-Email", claims.get("email").toString())
+                    .header("X-User-SubId", claimOrEmpty(claims, "sub"))
+                    .header("X-User-UserName", claimOrEmpty(claims, "preferred_username"))
+                    .header("X-User-FirstName", URLEncoder.encode(claimOrEmpty(claims, "given_name"), StandardCharsets.UTF_8))
+                    .header("X-User-LastName", URLEncoder.encode(claimOrEmpty(claims, "family_name"), StandardCharsets.UTF_8))
+                    .header("X-User-Email", claimOrEmpty(claims, "email"))
                     .header("X-User-Role", extractRole(claims))
                     .build();
 
@@ -133,9 +135,19 @@ public class JwtTokenFilter implements GlobalFilter, Ordered {
         return chain.filter(exchange);
     }
 
+    private String claimOrEmpty(Claims claims, String name) {
+        return Objects.toString(claims.get(name), "");
+    }
+
     private String extractRole(Claims claims) {
         Map<String, Object> resourceAccess = claims.get("resource_access", Map.class);
+        if (resourceAccess == null) {
+            return "UNKNOWN";
+        }
         Map<String, Object> clientAccess = (Map<String, Object>) resourceAccess.get("spring-microservices");
+        if (clientAccess == null) {
+            return "UNKNOWN";
+        }
         List<String> roles = (List<String>) clientAccess.get("roles");
 
         return (roles != null && !roles.isEmpty()) ? roles.get(0) : "UNKNOWN";
