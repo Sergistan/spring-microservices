@@ -31,6 +31,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import java.math.BigDecimal;
@@ -82,6 +83,7 @@ public class OrderControllerTest {
                 .willReturn(returned);
 
         mvc.perform(post("/order/api/v1/create")
+                        .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         // эмулируем заголовки из JwtTokenFilter
                         .header("X-User-SubId", "sub")
@@ -109,6 +111,7 @@ public class OrderControllerTest {
         given(orderService.checkOrder(requests)).willReturn(false);
 
         mvc.perform(post("/order/api/v1/create")
+                        .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-User-SubId", "sub")
                         .header("X-User-UserName", "login")
@@ -132,6 +135,7 @@ public class OrderControllerTest {
         given(orderService.paymentOrder(req)).willReturn(resp);
 
         mvc.perform(post("/order/api/v1/pay")
+                        .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req))
                 )
@@ -147,6 +151,7 @@ public class OrderControllerTest {
         given(orderService.paymentOrder(req)).willThrow(new OrderNotFoundException());
 
         mvc.perform(post("/order/api/v1/pay")
+                        .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req))
                 )
@@ -159,6 +164,7 @@ public class OrderControllerTest {
         PaymentRequest req = new PaymentRequest(orderUuid, "1234 5678 9012 3456");
 
         mvc.perform(post("/order/api/v1/refunded")
+                        .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req))
                 )
@@ -174,6 +180,7 @@ public class OrderControllerTest {
                 .given(orderService).refundedOrder(req);
 
         mvc.perform(post("/order/api/v1/refunded")
+                        .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req))
                 )

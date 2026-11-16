@@ -13,12 +13,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtAuthenticationConverterAdapter;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.authentication.RedirectServerAuthenticationSuccessHandler;
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.reactive.CorsWebFilter;
-import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 import reactor.core.publisher.Mono;
-
-import java.util.List;
 
 import static org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers.pathMatchers;
 
@@ -115,6 +110,11 @@ public class ReactiveConfig {
     @Bean
     @Order(2)
     public SecurityWebFilterChain resourceServerChain(ServerHttpSecurity http) {
+        // Осознанный набор маршрутов (см. routes в config-repo): order/shop требуют JWT.
+        // /payment/api/v1/** пока вне цепочки — через него ходят фоновые Feign-вызовы
+        // ReconciliationJob без пользовательского токена; закрывается на этапе A1 вместе
+        // с переводом внутренних вызовов на прямые адреса + сервисный токен.
+        // Docs-маршруты (/order/v3/api-docs и т.п.) открыты — это метаданные swagger-ui за oauth2Login.
         http
                 .securityMatcher(pathMatchers(
                         "/order/api/v1/**",
@@ -136,21 +136,6 @@ public class ReactiveConfig {
         JwtAuthenticationConverter jwtAuthenticationConverter = new JwtAuthenticationConverter();
         jwtAuthenticationConverter.setJwtGrantedAuthoritiesConverter(new AuthServerRoleConverter());
         return new ReactiveJwtAuthenticationConverterAdapter(jwtAuthenticationConverter);
-    }
-
-    @Bean
-    public CorsWebFilter corsFilter() {
-        CorsConfiguration config = new CorsConfiguration();
-        config.setAllowCredentials(true);
-
-        config.setAllowedOriginPatterns(List.of("*"));
-        config.addAllowedHeader("*");
-        config.addAllowedMethod("*");
-
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config);
-
-        return new CorsWebFilter(source);
     }
 
 }

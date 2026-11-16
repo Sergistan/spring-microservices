@@ -45,6 +45,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.BDDMockito.then;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import java.math.BigDecimal;
@@ -112,6 +113,7 @@ class OrderServiceIntegrationTest {
         String json = objectMapper.writeValueAsString(cr);
 
         String resp = mvc.perform(post("/order/api/v1/create")
+                        .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-User-SubId", "sub")
                         .header("X-User-UserName", "login")
@@ -124,6 +126,21 @@ class OrderServiceIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
 
         return UUID.fromString(objectMapper.readTree(resp).get("orderUuid").asText());
+    }
+
+    @Test
+    @DisplayName("Без JWT доступ к /order/api/v1/** запрещён (401), swagger и health открыты")
+    void orderEndpoints_unauthenticated_401() throws Exception {
+        CompositeRequest cr = new CompositeRequest(
+                List.of(new OrderRequest(UUID.randomUUID(), 1)),
+                new AddressDto("City", "Street", 1, 1));
+
+        mvc.perform(post("/order/api/v1/create")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(cr)))
+                .andExpect(status().isUnauthorized());
+
+        then(shopController).should(never()).checkOrder(any());
     }
 
     @Test
@@ -141,6 +158,7 @@ class OrderServiceIntegrationTest {
         String body = objectMapper.writeValueAsString(payload);
 
         mvc.perform(post("/order/api/v1/create")
+                        .with(jwt())
                         .contentType("application/json")
                         .header("X-User-SubId", "sub")
                         .header("X-User-UserName", "login")
@@ -190,6 +208,7 @@ class OrderServiceIntegrationTest {
 
         String payJson = objectMapper.writeValueAsString(payReq);
         mvc.perform(post("/order/api/v1/pay")
+                        .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payJson))
                 .andExpect(status().isOk())
@@ -222,12 +241,14 @@ class OrderServiceIntegrationTest {
                 .willReturn(new PaymentResponse(UUID.randomUUID(), Status.SUCCESS));
 
         mvc.perform(post("/order/api/v1/pay")
+                        .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payReq)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SUCCESS"));
 
         mvc.perform(post("/order/api/v1/pay")
+                        .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payReq)))
                 .andExpect(status().isBadRequest())
@@ -268,6 +289,7 @@ class OrderServiceIntegrationTest {
         CompositeRequest cr = new CompositeRequest(reqs, new AddressDto("City", "Street", 10, 101));
 
         mvc.perform(post("/order/api/v1/create")
+                        .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-User-SubId", "sub")
                         .header("X-User-UserName", "login")
@@ -287,6 +309,7 @@ class OrderServiceIntegrationTest {
         CompositeRequest cr = new CompositeRequest(List.of(), new AddressDto("City", "Street", 10, 101));
 
         mvc.perform(post("/order/api/v1/create")
+                        .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-User-SubId", "sub")
                         .header("X-User-UserName", "login")
@@ -313,6 +336,7 @@ class OrderServiceIntegrationTest {
                 .willReturn(new PaymentResponse(payId, Status.SUCCESS));
 
         mvc.perform(post("/order/api/v1/pay")
+                        .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payReq)))
                 .andExpect(status().isOk())
@@ -325,6 +349,7 @@ class OrderServiceIntegrationTest {
                 .willReturn(new PaymentResponse(refundId, Status.REFUNDED));
 
         mvc.perform(post("/order/api/v1/refunded")
+                        .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(refundReq)))
                 .andExpect(status().isOk())
