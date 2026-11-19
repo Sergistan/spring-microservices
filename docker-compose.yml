@@ -292,6 +292,7 @@ services:
     container_name: config-server
     environment:
       TZ: Europe/Moscow
+      ENCRYPT_KEY: ${ENCRYPT_KEY}
     ports:
       - "8071:8071"
     networks:
