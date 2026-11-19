@@ -23,9 +23,11 @@ import java.util.Map;
 
 /**
  * Обработка ошибок консьюмера (DLQ): если запись из topic-orders не обработалась после
- * 2 ретраев (FixedBackOff 1с x2), DeadLetterPublishingRecoverer публикует её в topic-orders.DLT
- * (та же партиция) с заголовками kafka_dlt-exception-*. Дальнейшую доставку не блокируем:
- * при MANUAL_IMMEDIATE offset после recover коммитит сам error handler.
+ * ретраев (по умолчанию 3 попытки с паузой 10 с — kafka.error.backoff-interval-ms /
+ * kafka.error.backoff-attempts; пауза больше типичного троттлинга SMTP, чтобы не долбить
+ * внешний сервис мгновенными повторами), DeadLetterPublishingRecoverer публикует её в
+ * topic-orders.DLT (та же партиция) с заголовками kafka_dlt-exception-*. Дальнейшую доставку
+ * не блокируем: при MANUAL_IMMEDIATE offset после recover коммитит сам error handler.
  * Публикаторы: raw (byte[]) для битых при десериализации, json — для ошибок обработки.
  */
 @Configuration
@@ -70,6 +72,11 @@ public class KafkaErrorConfig {
                     return new TopicPartition(record.topic() + DLT_SUFFIX, record.partition());
                 });
 
-        return new DefaultErrorHandler(recoverer, new FixedBackOff(1000L, 2));
+        // Ретраи с паузой 10 с (по умолчанию): при троттлинге внешней системы (Gmail и т.п.)
+        // мгновенные повторы только продлевают блокировку; параметры переопределяются в config-repo
+        long backoffIntervalMs = environment.getProperty("kafka.error.backoff-interval-ms", Long.class, 10_000L);
+        long backoffAttempts = environment.getProperty("kafka.error.backoff-attempts", Long.class, 3L);
+
+        return new DefaultErrorHandler(recoverer, new FixedBackOff(backoffIntervalMs, backoffAttempts));
     }
 }
