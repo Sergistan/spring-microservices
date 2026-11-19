@@ -1,4 +1,4 @@
-package com.utochkin.paymentservice.requests;
+package com.utochkin.paymentservice.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

@@ -1,6 +1,6 @@
 package com.utochkin.orderservice.exceptions;
 
-import com.utochkin.orderservice.models.ErrorResponse;
+import com.utochkin.orderservice.dto.ErrorResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;

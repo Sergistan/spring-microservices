@@ -1,4 +1,4 @@
-package com.utochkin.notificationservice.models;
+package com.utochkin.notificationservice.dto;
 
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Positive;

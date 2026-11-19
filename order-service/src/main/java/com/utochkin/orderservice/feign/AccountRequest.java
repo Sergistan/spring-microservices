@@ -1,4 +1,4 @@
-package com.utochkin.orderservice.request;
+package com.utochkin.orderservice.feign;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;

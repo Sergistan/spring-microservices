@@ -1,4 +1,4 @@
-package com.utochkin.shopservice.requests;
+package com.utochkin.shopservice.feign;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;

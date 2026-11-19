@@ -1,7 +1,7 @@
 package com.utochkin.orderservice.controllers;
 
-import com.utochkin.orderservice.request.OrderRequest;
-import com.utochkin.orderservice.request.StockChangeRequest;
+import com.utochkin.orderservice.web.OrderRequest;
+import com.utochkin.orderservice.feign.StockChangeRequest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

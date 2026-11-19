@@ -2,7 +2,7 @@ package com.utochkin.shopservice;
 
 import com.utochkin.shopservice.config.AuthServerRoleConverter;
 import com.utochkin.shopservice.config.Config;
-import com.utochkin.shopservice.dto.ProductDtoRequest;
+import com.utochkin.shopservice.web.ProductDtoRequest;
 import com.utochkin.shopservice.exceptions.CustomAccessDeniedHandler;
 import com.utochkin.shopservice.models.Product;
 import com.fasterxml.jackson.databind.ObjectMapper;

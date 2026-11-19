@@ -1,4 +1,4 @@
-package com.utochkin.paymentservice.models;
+package com.utochkin.orderservice.feign;
 
 import java.io.Serializable;
 import java.util.UUID;

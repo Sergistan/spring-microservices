@@ -1,5 +1,6 @@
-package com.utochkin.orderservice.request;
+package com.utochkin.orderservice.feign;
 
+import com.utochkin.orderservice.web.OrderRequest;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;

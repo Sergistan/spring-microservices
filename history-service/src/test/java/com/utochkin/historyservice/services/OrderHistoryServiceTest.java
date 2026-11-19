@@ -59,12 +59,12 @@ class OrderHistoryServiceTest {
         orderDto = new OrderDtoForKafka(
                 UUID.randomUUID(),
                 BigDecimal.valueOf(120.0),
-                com.utochkin.historyservice.models.Status.SUCCESS,
+                com.utochkin.historyservice.dto.Status.SUCCESS,
                 LocalDateTime.now().minusDays(1),
                 LocalDateTime.now(),
                 new AddressDto("City", "Street", 1, 1),
                 new UserDto("john", "John", "Doe", "john@example.com"),
-                List.of(new com.utochkin.historyservice.models.OrderRequest(UUID.randomUUID(), 2)),
+                List.of(new com.utochkin.historyservice.dto.OrderRequest(UUID.randomUUID(), 2)),
                 UUID.randomUUID(),
                 UUID.randomUUID()
         );

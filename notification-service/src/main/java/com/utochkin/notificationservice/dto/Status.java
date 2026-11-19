@@ -1,4 +1,4 @@
-package com.utochkin.notificationservice.models;
+package com.utochkin.notificationservice.dto;
 
 public enum Status {
     SUCCESS,

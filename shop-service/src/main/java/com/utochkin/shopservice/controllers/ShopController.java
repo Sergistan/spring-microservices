@@ -1,10 +1,10 @@
 package com.utochkin.shopservice.controllers;
 
 import com.utochkin.shopservice.dto.ProductDto;
-import com.utochkin.shopservice.dto.ProductDtoRequest;
-import com.utochkin.shopservice.requests.ErrorResponse;
-import com.utochkin.shopservice.requests.OrderRequest;
-import com.utochkin.shopservice.requests.StockChangeRequest;
+import com.utochkin.shopservice.web.ProductDtoRequest;
+import com.utochkin.shopservice.dto.ErrorResponse;
+import com.utochkin.shopservice.feign.OrderRequest;
+import com.utochkin.shopservice.feign.StockChangeRequest;
 import com.utochkin.shopservice.services.ProductService;
 import io.swagger.v3.oas.annotations.Hidden;
 import io.swagger.v3.oas.annotations.Operation;

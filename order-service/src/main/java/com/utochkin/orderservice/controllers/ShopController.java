@@ -1,8 +1,8 @@
 package com.utochkin.orderservice.controllers;
 
 
-import com.utochkin.orderservice.request.OrderRequest;
-import com.utochkin.orderservice.request.StockChangeRequest;
+import com.utochkin.orderservice.web.OrderRequest;
+import com.utochkin.orderservice.feign.StockChangeRequest;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

@@ -1,13 +1,13 @@
 package com.utochkin.paymentservice.services;
 
 import com.utochkin.paymentservice.exceptions.CardNumberNotFoundException;
-import com.utochkin.paymentservice.models.OrderPaymentsResponse;
+import com.utochkin.paymentservice.dto.OrderPaymentsResponse;
 import com.utochkin.paymentservice.models.Payment;
 import com.utochkin.paymentservice.models.PaymentType;
-import com.utochkin.paymentservice.models.PaymentResponse;
+import com.utochkin.paymentservice.dto.PaymentResponse;
 import com.utochkin.paymentservice.models.Status;
 import com.utochkin.paymentservice.repositories.PaymentRepository;
-import com.utochkin.paymentservice.requests.AccountRequest;
+import com.utochkin.paymentservice.web.AccountRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.dao.DataIntegrityViolationException;

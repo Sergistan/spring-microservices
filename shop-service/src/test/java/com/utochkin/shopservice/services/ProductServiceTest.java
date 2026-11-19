@@ -1,7 +1,7 @@
 package com.utochkin.shopservice.services;
 
 import com.utochkin.shopservice.dto.ProductDto;
-import com.utochkin.shopservice.dto.ProductDtoRequest;
+import com.utochkin.shopservice.web.ProductDtoRequest;
 import com.utochkin.shopservice.exceptions.InsufficientStockException;
 import com.utochkin.shopservice.exceptions.ProductNotFoundException;
 import com.utochkin.shopservice.mappers.ProductMapper;
@@ -10,7 +10,7 @@ import com.utochkin.shopservice.models.StockOperation;
 import com.utochkin.shopservice.models.StockOperationType;
 import com.utochkin.shopservice.repositories.ProductRepository;
 import com.utochkin.shopservice.repositories.StockOperationRepository;
-import com.utochkin.shopservice.requests.OrderRequest;
+import com.utochkin.shopservice.feign.OrderRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

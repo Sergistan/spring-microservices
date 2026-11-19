@@ -1,4 +1,4 @@
-package com.utochkin.orderservice.request;
+package com.utochkin.orderservice.feign;
 
 import com.utochkin.orderservice.models.Status;
 import io.swagger.v3.oas.annotations.media.Schema;

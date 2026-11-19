@@ -2,11 +2,11 @@ package com.utochkin.orderservice.controllers;
 
 import com.utochkin.orderservice.dto.OrderDto;
 import com.utochkin.orderservice.dto.OrderDtoForKafka;
-import com.utochkin.orderservice.models.ErrorResponse;
+import com.utochkin.orderservice.dto.ErrorResponse;
 import com.utochkin.orderservice.models.User;
-import com.utochkin.orderservice.request.CompositeRequest;
-import com.utochkin.orderservice.request.PaymentRequest;
-import com.utochkin.orderservice.request.PaymentResponse;
+import com.utochkin.orderservice.web.CompositeRequest;
+import com.utochkin.orderservice.web.PaymentRequest;
+import com.utochkin.orderservice.feign.PaymentResponse;
 import com.utochkin.orderservice.services.OrderService;
 import com.utochkin.orderservice.services.UserService;
 import io.swagger.v3.oas.annotations.Operation;

@@ -9,7 +9,7 @@ import com.utochkin.paymentservice.exceptions.ExceptionControllerAdvice;
 import com.utochkin.paymentservice.models.Account;
 import com.utochkin.paymentservice.repositories.AccountRepository;
 import com.utochkin.paymentservice.repositories.PaymentRepository;
-import com.utochkin.paymentservice.requests.AccountRequest;
+import com.utochkin.paymentservice.web.AccountRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

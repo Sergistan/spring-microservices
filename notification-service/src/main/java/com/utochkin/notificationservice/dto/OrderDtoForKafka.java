@@ -1,8 +1,8 @@
 package com.utochkin.notificationservice.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
-import com.utochkin.notificationservice.models.OrderRequest;
-import com.utochkin.notificationservice.models.Status;
+import com.utochkin.notificationservice.dto.OrderRequest;
+import com.utochkin.notificationservice.dto.Status;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;

@@ -1,4 +1,4 @@
-package com.utochkin.orderservice.models;
+package com.utochkin.shopservice.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;

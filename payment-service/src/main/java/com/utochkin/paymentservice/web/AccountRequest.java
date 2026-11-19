@@ -1,4 +1,4 @@
-package com.utochkin.paymentservice.requests;
+package com.utochkin.paymentservice.web;
 
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;

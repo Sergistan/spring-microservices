@@ -1,5 +1,6 @@
-package com.utochkin.paymentservice.models;
+package com.utochkin.paymentservice.dto;
 
+import com.utochkin.paymentservice.models.Status;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.AllArgsConstructor;
 import lombok.Data;

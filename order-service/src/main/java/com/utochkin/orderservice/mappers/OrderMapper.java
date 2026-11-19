@@ -5,7 +5,7 @@ import com.utochkin.orderservice.dto.OrderDto;
 import com.utochkin.orderservice.dto.OrderDtoForKafka;
 import com.utochkin.orderservice.dto.UserDto;
 import com.utochkin.orderservice.models.Order;
-import com.utochkin.orderservice.request.OrderRequest;
+import com.utochkin.orderservice.web.OrderRequest;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 

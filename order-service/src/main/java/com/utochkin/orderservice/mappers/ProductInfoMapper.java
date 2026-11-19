@@ -1,7 +1,7 @@
 package com.utochkin.orderservice.mappers;
 
 import com.utochkin.orderservice.models.ProductInfo;
-import com.utochkin.orderservice.request.OrderRequest;
+import com.utochkin.orderservice.web.OrderRequest;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 

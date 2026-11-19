@@ -2,7 +2,7 @@ package com.utochkin.orderservice.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.utochkin.orderservice.models.Status;
-import com.utochkin.orderservice.request.OrderRequest;
+import com.utochkin.orderservice.web.OrderRequest;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;

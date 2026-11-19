@@ -1,9 +1,9 @@
 package com.utochkin.orderservice.controllers;
 
 
-import com.utochkin.orderservice.request.AccountRequest;
-import com.utochkin.orderservice.request.OrderPaymentsResponse;
-import com.utochkin.orderservice.request.PaymentResponse;
+import com.utochkin.orderservice.feign.AccountRequest;
+import com.utochkin.orderservice.feign.OrderPaymentsResponse;
+import com.utochkin.orderservice.feign.PaymentResponse;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;

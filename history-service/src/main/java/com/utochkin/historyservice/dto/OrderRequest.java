@@ -1,4 +1,4 @@
-package com.utochkin.historyservice.models;
+package com.utochkin.historyservice.dto;
 
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Positive;

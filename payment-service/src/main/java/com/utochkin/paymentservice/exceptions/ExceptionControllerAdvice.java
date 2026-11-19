@@ -1,6 +1,6 @@
 package com.utochkin.paymentservice.exceptions;
 
-import com.utochkin.paymentservice.requests.ErrorResponse;
+import com.utochkin.paymentservice.dto.ErrorResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;

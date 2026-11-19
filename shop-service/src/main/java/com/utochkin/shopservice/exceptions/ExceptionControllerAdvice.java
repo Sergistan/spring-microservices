@@ -1,6 +1,6 @@
 package com.utochkin.shopservice.exceptions;
 
-import com.utochkin.shopservice.requests.ErrorResponse;
+import com.utochkin.shopservice.dto.ErrorResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;

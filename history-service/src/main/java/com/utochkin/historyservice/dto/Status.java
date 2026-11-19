@@ -1,4 +1,4 @@
-package com.utochkin.historyservice.models;
+package com.utochkin.historyservice.dto;
 
 public enum Status {
     SUCCESS,

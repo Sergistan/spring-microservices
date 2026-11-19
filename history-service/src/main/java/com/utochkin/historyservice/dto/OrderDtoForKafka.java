@@ -1,8 +1,8 @@
 package com.utochkin.historyservice.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
-import com.utochkin.historyservice.models.OrderRequest;
-import com.utochkin.historyservice.models.Status;
+import com.utochkin.historyservice.dto.OrderRequest;
+import com.utochkin.historyservice.dto.Status;
 import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;
 import lombok.Data;

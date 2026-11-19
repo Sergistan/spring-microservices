@@ -1,8 +1,8 @@
 package com.utochkin.paymentservice.controllers;
 
-import com.utochkin.paymentservice.models.OrderPaymentsResponse;
-import com.utochkin.paymentservice.models.PaymentResponse;
-import com.utochkin.paymentservice.requests.AccountRequest;
+import com.utochkin.paymentservice.dto.OrderPaymentsResponse;
+import com.utochkin.paymentservice.dto.PaymentResponse;
+import com.utochkin.paymentservice.web.AccountRequest;
 import com.utochkin.paymentservice.services.PaymentService;
 
 import jakarta.validation.Valid;

@@ -2,7 +2,7 @@ package com.utochkin.orderservice.resilience;
 
 import com.utochkin.orderservice.controllers.ShopController;
 import com.utochkin.orderservice.exceptions.ServiceUnavailableException;
-import com.utochkin.orderservice.request.OrderRequest;
+import com.utochkin.orderservice.web.OrderRequest;
 import com.utochkin.orderservice.services.OrderService;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;

@@ -1,4 +1,4 @@
-package com.utochkin.orderservice.request;
+package com.utochkin.paymentservice.dto;
 
 import java.io.Serializable;
 import java.util.UUID;

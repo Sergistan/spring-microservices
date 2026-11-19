@@ -1,8 +1,8 @@
 package com.utochkin.orderservice.controllers;
 
 import com.utochkin.orderservice.models.Status;
-import com.utochkin.orderservice.request.AccountRequest;
-import com.utochkin.orderservice.request.PaymentResponse;
+import com.utochkin.orderservice.feign.AccountRequest;
+import com.utochkin.orderservice.feign.PaymentResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
