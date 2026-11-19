@@ -259,6 +259,8 @@ public class OrderService {
      * Возврат оплаченного заказа: проверка владельца (403 чужим) -> только статус SUCCESS
      * годен -> CAS-захват PROCESSING -> возврат средств в payment -> в одной транзакции:
      * вернуть остатки в shop, удалить позиции, статус REFUNDED, событие в outbox.
+     * Компенсация: если payment ответил ошибкой, PROCESSING откатывается в SUCCESS
+     * (иначе заказ застревает и последующие попытки получают "не был оплачен").
      */
     @CircuitBreaker(name = "circuitBreakerRefundedOrder", fallbackMethod = "fallbackMethodRefundedOrder")
     @Retry(name = "retryRefundedOrder", fallbackMethod = "fallbackMethodRefundedOrder")
@@ -283,9 +285,22 @@ public class OrderService {
             throw new FailedOrderStatusException("Заказ нельзя отменить, т.к. он не был оплачен!");
         }
 
-        BigDecimal totalAmountById = orderRepository.findTotalAmountByOrderUuid(paymentRequest.getOrderUuid());
-        PaymentResponse refundedOrder = paymentController.refundedOrder(new AccountRequest(
-                paymentRequest.getOrderUuid(), totalAmountById, paymentRequest.getCardNumber()));
+        PaymentResponse refundedOrder;
+        try {
+            BigDecimal totalAmountById = orderRepository.findTotalAmountByOrderUuid(paymentRequest.getOrderUuid());
+            refundedOrder = paymentController.refundedOrder(new AccountRequest(
+                    paymentRequest.getOrderUuid(), totalAmountById, paymentRequest.getCardNumber()));
+        } catch (RuntimeException e) {
+            // Компенсация неудачного возврата: вернуть статус SUCCESS, чтобы заказ не застревал
+            // в PROCESSING и повторная попытка начиналась с корректного состояния
+            Integer restored = transactionTemplate.execute(status ->
+                    orderRepository.transitionStatus(paymentRequest.getOrderUuid(), List.of(Status.PROCESSING), Status.SUCCESS));
+            if (restored != null && restored > 0) {
+                log.warn("OrderService: возврат не удался ({}), заказ {} возвращён в SUCCESS",
+                        e.getMessage(), paymentRequest.getOrderUuid());
+            }
+            throw e;
+        }
 
         if (refundedOrder.getStatus() == REFUNDED) {
 
@@ -329,7 +344,8 @@ public class OrderService {
 
     /**
      * Общий разбор ошибок для fallback'ов pay/refund: переводит Feign-статусы payment-сервиса
-     * в доменные исключения (404 -> карта не найдена, 402 -> не хватает средств),
+     * в доменные исключения (404 -> карта не найдена, 402 -> не хватает средств,
+     * 400 -> причина из тела ErrorResponse payment, например "возврат невозможен"),
      * а доменные исключения пробрасывает без двойной обёртки.
      */
     private static void extractedFullbackMethod(PaymentRequest paymentRequest, Throwable throwable) {
@@ -341,6 +357,16 @@ public class OrderService {
             if (fe.status() == HttpStatus.PAYMENT_REQUIRED.value()) {
                 log.warn("Недостаточно средств на карте {} (402)", maskCard(paymentRequest.getCardNumber()));
                 throw new FailedPayOrderException();
+            }
+            if (fe.status() == HttpStatus.BAD_REQUEST.value()) {
+                // payment вернул бизнес-отказ (например, "оплаченный заказ не найден, возврат
+                // невозможен") — показываем его причину, а не безликое "сервис недоступен"
+                java.util.regex.Matcher m = java.util.regex.Pattern
+                        .compile("\"messageError\"\\s*:\\s*\"([^\"]+)\"")
+                        .matcher(fe.contentUTF8());
+                String reason = m.find() ? m.group(1) : "Платёжный сервис отклонил операцию";
+                log.warn("Payment отклонил операцию для заказа {}: {}", paymentRequest.getOrderUuid(), reason);
+                throw new FailedOrderStatusException(reason);
             }
         }
         if (throwable instanceof FailedOrderStatusException ||
