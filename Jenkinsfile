@@ -3,6 +3,9 @@ pipeline {
   tools { jdk 'Java21' }
   environment {
     DOCKERHUB_NAMESPACE = 'sergistan'
+    // Все образы проекта живут в одном репозитории Docker Hub,
+    // сервисы различаются тегом: <сервис>-<номер сборки>
+    DOCKERHUB_REPO = "${DOCKERHUB_NAMESPACE}/spring-microservices"
   }
   stages {
     stage('Checkout') {
@@ -42,7 +45,7 @@ pipeline {
           services.each { svc ->
             powershell """
               Write-Host "=== Building Docker image for ${svc} ==="
-              docker build -t ${DOCKERHUB_NAMESPACE}/${svc}:${env.BUILD_NUMBER} .\\${svc}
+              docker build -t ${DOCKERHUB_REPO}:${svc}-${env.BUILD_NUMBER} .\\${svc}
             """
           }
         }
@@ -59,7 +62,7 @@ pipeline {
               'notification-service','history-service'
             ]
             services.each { svc ->
-              powershell "docker push ${DOCKERHUB_NAMESPACE}/${svc}:${env.BUILD_NUMBER}"
+              powershell "docker push ${DOCKERHUB_REPO}:${svc}-${env.BUILD_NUMBER}"
             }
           }
         }
