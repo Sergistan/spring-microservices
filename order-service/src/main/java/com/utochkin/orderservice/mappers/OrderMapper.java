@@ -5,7 +5,7 @@ import com.utochkin.orderservice.dto.OrderDto;
 import com.utochkin.orderservice.dto.OrderDtoForKafka;
 import com.utochkin.orderservice.dto.UserDto;
 import com.utochkin.orderservice.models.Order;
-import com.utochkin.orderservice.request.OrderRequest;
+import com.utochkin.orderservice.web.OrderRequest;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -21,5 +21,6 @@ public interface OrderMapper {
     @Mapping(target = "userDto", expression = "java(userDto)")
     @Mapping(target = "addressDto", expression = "java(addressDto)")
     @Mapping(target = "orderRequests", expression = "java(orderRequests)")
+    @Mapping(target = "eventId", ignore = true)
     OrderDtoForKafka toDtoForKafka(Order order, UserDto userDto, AddressDto addressDto, List<OrderRequest> orderRequests);
 }

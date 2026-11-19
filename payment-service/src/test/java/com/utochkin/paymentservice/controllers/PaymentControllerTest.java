@@ -6,9 +6,9 @@ import com.utochkin.paymentservice.config.AuthServerRoleConverter;
 import com.utochkin.paymentservice.config.Config;
 import com.utochkin.paymentservice.exceptions.CardNumberNotFoundException;
 import com.utochkin.paymentservice.exceptions.CustomAccessDeniedHandler;
-import com.utochkin.paymentservice.models.PaymentResponse;
+import com.utochkin.paymentservice.dto.PaymentResponse;
 import com.utochkin.paymentservice.models.Status;
-import com.utochkin.paymentservice.requests.AccountRequest;
+import com.utochkin.paymentservice.web.AccountRequest;
 import com.utochkin.paymentservice.services.PaymentService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,6 +30,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import java.math.BigDecimal;
 
 @WebMvcTest(controllers = PaymentController.class)
 @Import({
@@ -56,7 +57,7 @@ public class PaymentControllerTest {
     @Test
     @DisplayName("POST /payment/api/v1/pay — 200, SUCCESS")
     void paymentOrder_Success() throws Exception {
-        AccountRequest req = new AccountRequest(100.0, "1111 2222 3333 4444");
+        AccountRequest req = new AccountRequest(UUID.randomUUID(), BigDecimal.valueOf(100.0), "1111 2222 3333 4444");
         PaymentResponse resp = new PaymentResponse(UUID.randomUUID(), Status.SUCCESS);
 
         given(paymentService.paymentOrder(any(AccountRequest.class))).willReturn(resp);
@@ -73,7 +74,7 @@ public class PaymentControllerTest {
     @Test
     @DisplayName("POST /payment/api/v1/pay — 404, CardNumberNotFoundException")
     void paymentOrder_CardNotFound_NotFound() throws Exception {
-        AccountRequest req = new AccountRequest(50.0, "9999 8888 7777 6666");
+        AccountRequest req = new AccountRequest(UUID.randomUUID(), BigDecimal.valueOf(50.0), "9999 8888 7777 6666");
 
         given(paymentService.paymentOrder(any(AccountRequest.class)))
                 .willThrow(new CardNumberNotFoundException());
@@ -83,13 +84,13 @@ public class PaymentControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.messageError").value("Error: card number not found!"));
+                .andExpect(jsonPath("$.messageError").value("Ошибка: карта с таким номером не найдена!"));
     }
 
     @Test
     @DisplayName("POST /payment/api/v1/refunded — 200, REFUNDED")
     void refundedOrder_Success() throws Exception {
-        AccountRequest req = new AccountRequest(75.0, "1111 2222 3333 4444");
+        AccountRequest req = new AccountRequest(UUID.randomUUID(), BigDecimal.valueOf(75.0), "1111 2222 3333 4444");
         PaymentResponse resp = new PaymentResponse(UUID.randomUUID(), Status.REFUNDED);
 
         given(paymentService.refundedOrder(any(AccountRequest.class))).willReturn(resp);
@@ -105,7 +106,7 @@ public class PaymentControllerTest {
     @Test
     @DisplayName("POST /payment/api/v1/refunded — 404, CardNumberNotFoundException")
     void refundedOrder_CardNotFound() throws Exception {
-        AccountRequest req = new AccountRequest(20.0, "0000 1111 2222 3333");
+        AccountRequest req = new AccountRequest(UUID.randomUUID(), BigDecimal.valueOf(20.0), "0000 1111 2222 3333");
 
         given(paymentService.refundedOrder(any(AccountRequest.class)))
                 .willThrow(new CardNumberNotFoundException());
@@ -115,6 +116,6 @@ public class PaymentControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.messageError").value("Error: card number not found!"));
+                .andExpect(jsonPath("$.messageError").value("Ошибка: карта с таким номером не найдена!"));
     }
 }

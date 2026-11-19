@@ -2,6 +2,6 @@ package com.utochkin.orderservice.exceptions;
 
 public class UserNotFoundException extends RuntimeException{
     public UserNotFoundException() {
-        super("Error: user not found!");
+        super("Ошибка: пользователь не найден!");
     }
 }

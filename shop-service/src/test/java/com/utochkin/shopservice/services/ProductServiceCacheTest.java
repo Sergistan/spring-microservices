@@ -1,10 +1,12 @@
 package com.utochkin.shopservice.services;
 
 import com.utochkin.shopservice.dto.ProductDto;
-import com.utochkin.shopservice.dto.ProductDtoRequest;
+import com.utochkin.shopservice.web.ProductDtoRequest;
 import com.utochkin.shopservice.mappers.ProductMapper;
 import com.utochkin.shopservice.models.Product;
 import com.utochkin.shopservice.repositories.ProductRepository;
+import com.utochkin.shopservice.repositories.StockOperationRepository;
+import com.utochkin.shopservice.feign.OrderRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,6 +23,7 @@ import org.springframework.data.domain.*;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -40,6 +43,9 @@ class ProductServiceCacheTest {
 
     @MockitoBean
     private ProductRepository productRepo;
+
+    @MockitoBean
+    private StockOperationRepository stockOperationRepo;
 
     @MockitoBean
     private ProductMapper productMapper;
@@ -71,9 +77,9 @@ class ProductServiceCacheTest {
         sampleEntity.setArticleId(sampleId);
         sampleEntity.setName("A");
         sampleEntity.setQuantity(5);
-        sampleEntity.setPrice(10.0);
+        sampleEntity.setPrice(BigDecimal.valueOf(10.0));
 
-        sampleDto = new ProductDto(sampleId, "A", 5, 10.0);
+        sampleDto = new ProductDto(sampleId, "A", 5, BigDecimal.valueOf(10.0));
 
         // очистим кеши перед каждым тестом
         cacheManager.getCache("product").clear();
@@ -108,11 +114,11 @@ class ProductServiceCacheTest {
     @Test
     @DisplayName("работа кэширования при добавлении нового продукта")
     void caching_evictProductsOnAddAndPopulateProduct() {
-        ProductDtoRequest req = new ProductDtoRequest("New", 2, 20.0);
+        ProductDtoRequest req = new ProductDtoRequest("New", 2, BigDecimal.valueOf(20.0));
         Product savedEntity = Product.builder()
                 .id(100L)
                 .articleId(UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"))
-                .name("New").quantity(2).price(20.0).build();
+                .name("New").quantity(2).price(BigDecimal.valueOf(20.0)).build();
         ProductDto returnedDto = new ProductDto(
                 savedEntity.getArticleId(),
                 savedEntity.getName(),
@@ -174,15 +180,54 @@ class ProductServiceCacheTest {
     }
 
     @Test
+    @DisplayName("списание остатков при создании заказа инвалидирует кэши product и products")
+    void caching_evictCachesOnChangeQuantityAfterCreateOrder() {
+        cacheManager.getCache("products").put("0-2-" + pageable.getSort(), List.of(sampleDto));
+        cacheManager.getCache("product").put(sampleId, sampleDto);
+
+        given(stockOperationRepo.existsByOrderUuidAndType(any(UUID.class), any(com.utochkin.shopservice.models.StockOperationType.class)))
+                .willReturn(false);
+        given(productRepo.findAllByArticleIds(List.of(sampleId))).willReturn(List.of(sampleEntity));
+        given(productRepo.deductStock(sampleId, 2)).willReturn(1);
+
+        productService.changeTotalQuantityProductsAfterCreateOrder(UUID.randomUUID(),
+                List.of(new OrderRequest(sampleId, 2)));
+
+        assertThat(cacheManager.getCache("products").get("0-2-" + pageable.getSort())).isNull();
+        assertThat(cacheManager.getCache("product").get(sampleId)).isNull();
+
+        then(productRepo).should().deductStock(sampleId, 2);
+    }
+
+    @Test
+    @DisplayName("восстановление остатков при возврате заказа инвалидирует кэши product и products")
+    void caching_evictCachesOnChangeQuantityAfterRefundedOrder() {
+        cacheManager.getCache("products").put("0-2-" + pageable.getSort(), List.of(sampleDto));
+        cacheManager.getCache("product").put(sampleId, sampleDto);
+
+        given(stockOperationRepo.existsByOrderUuidAndType(any(UUID.class), any(com.utochkin.shopservice.models.StockOperationType.class)))
+                .willReturn(false);
+        given(productRepo.restoreStock(sampleId, 4)).willReturn(1);
+
+        productService.changeTotalQuantityProductsAfterRefundedOrder(UUID.randomUUID(),
+                List.of(new OrderRequest(sampleId, 4)));
+
+        assertThat(cacheManager.getCache("products").get("0-2-" + pageable.getSort())).isNull();
+        assertThat(cacheManager.getCache("product").get(sampleId)).isNull();
+
+        then(productRepo).should().restoreStock(sampleId, 4);
+    }
+
+    @Test
     @DisplayName("работа кэширования при обновлении продукта")
     void caching_putOnUpdateAndEvictProducts() {
         cacheManager.getCache("products").put("0-2-" + pageable.getSort(), List.of(sampleDto));
 
         given(productRepo.findByArticleId(sampleId)).willReturn(Optional.of(sampleEntity));
 
-        ProductDtoRequest req = new ProductDtoRequest("B", 7, 15.0);
+        ProductDtoRequest req = new ProductDtoRequest("B", 7, BigDecimal.valueOf(15.0));
 
-        ProductDto updatedDto = new ProductDto(sampleId, "B", 7, 15.0);
+        ProductDto updatedDto = new ProductDto(sampleId, "B", 7, BigDecimal.valueOf(15.0));
         given(productMapper.toDto(sampleEntity)).willReturn(updatedDto);
 
         ProductDto result = productService.updateProduct(sampleId, req);

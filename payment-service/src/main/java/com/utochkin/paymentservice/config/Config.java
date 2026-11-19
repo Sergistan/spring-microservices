@@ -11,6 +11,11 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
 
+/**
+ * Security-конфигурация payment-service: все /payment/api/v1/** требуют JWT (Keycloak).
+ * Вызывают два потребителя: order-service от имени пользователя (ретрансляция JWT в Feign)
+ * и его же фоновая ReconciliationJob — сервисным токеном client_credentials.
+ */
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
@@ -18,6 +23,7 @@ public class Config {
 
     private final CustomAccessDeniedHandler customAccessDeniedHandler;
 
+    /** Stateless-JWT цепочка: любые /payment/api/v1/** — только с валидным токеном Keycloak. */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
@@ -31,6 +37,7 @@ public class Config {
                 )
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/actuator/prometheus").permitAll()
+                        .requestMatchers("/actuator/health/**").permitAll()
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .oauth2ResourceServer(oauth2 -> oauth2

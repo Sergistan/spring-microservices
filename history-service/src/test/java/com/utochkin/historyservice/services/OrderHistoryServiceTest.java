@@ -4,9 +4,8 @@ import com.utochkin.historyservice.dto.AddressDto;
 import com.utochkin.historyservice.dto.OrderDtoForKafka;
 import com.utochkin.historyservice.dto.UserDto;
 import com.utochkin.historyservice.models.OrderHistory;
-import com.utochkin.historyservice.models.OrderRequest;
-import com.utochkin.historyservice.models.Status;
-import com.utochkin.historyservice.repositories.OrderHistoryRepository;
+import com.utochkin.historyservice.models.ProcessedEvent;
+import com.utochkin.historyservice.repositories.ProcessedEventRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,22 +14,40 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.kafka.support.Acknowledgment;
+import org.bson.Document;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import java.math.BigDecimal;
 
 @ExtendWith(MockitoExtension.class)
 class OrderHistoryServiceTest {
 
     @Mock
-    private OrderHistoryRepository orderHistoryRepository;
+    private ProcessedEventRepository processedEventRepository;
+
+    @Mock
+    private MongoTemplate mongoTemplate;
+
+    @Mock
+    private Acknowledgment ack;
 
     @InjectMocks
     private OrderHistoryService orderHistoryService;
@@ -41,44 +58,75 @@ class OrderHistoryServiceTest {
     void setup() {
         orderDto = new OrderDtoForKafka(
                 UUID.randomUUID(),
-                120.0,
-                Status.SUCCESS,
+                BigDecimal.valueOf(120.0),
+                com.utochkin.historyservice.dto.Status.SUCCESS,
                 LocalDateTime.now().minusDays(1),
                 LocalDateTime.now(),
                 new AddressDto("City", "Street", 1, 1),
                 new UserDto("john", "John", "Doe", "john@example.com"),
-                List.of(new OrderRequest(UUID.randomUUID(), 2)),
+                List.of(new com.utochkin.historyservice.dto.OrderRequest(UUID.randomUUID(), 2)),
+                UUID.randomUUID(),
                 UUID.randomUUID()
         );
     }
 
     @Test
-    @DisplayName("Создание нового OrderHistory для нового пользователя и его дальнейшее сохранение")
-    void consume_createsNewOrderHistory_ifUserNotExists() {
-        when(orderHistoryRepository.findByUsername("john"))
-                .thenReturn(Optional.empty());
+    @DisplayName("Запись истории — атомарный upsert с $push в orders по username")
+    void consume_upsertsWithPush() {
+        doReturn(null).when(processedEventRepository).insert(any(ProcessedEvent.class));
 
-        orderHistoryService.consume(orderDto);
+        orderHistoryService.consume(orderDto, ack);
 
-        ArgumentCaptor<OrderHistory> captor = ArgumentCaptor.forClass(OrderHistory.class);
-        verify(orderHistoryRepository).save(captor.capture());
+        ArgumentCaptor<Update> updateCaptor = ArgumentCaptor.forClass(Update.class);
+        verify(mongoTemplate).upsert(any(Query.class), updateCaptor.capture(), eq(OrderHistory.class));
 
-        OrderHistory saved = captor.getValue();
-        assertThat(saved.getUsername()).isEqualTo("john");
-        assertThat(saved.getOrders()).hasSize(1);
-        assertThat(saved.getOrders().getFirst()).isEqualTo(orderDto);
+        Update update = updateCaptor.getValue();
+        Object push = update.getUpdateObject().get("$push");
+        assertThat(push)
+                .as("в $push по ключу orders лежит именно событие текущего заказа")
+                .isInstanceOfSatisfying(Document.class, pushDoc ->
+                        assertThat(pushDoc.get("orders")).isEqualTo(orderDto));
+
+        verify(ack).acknowledge();
     }
 
     @Test
-    @DisplayName("Корректное сохранение в OrderHistory для существующего пользователя")
-    void consume_appendsOrder_ifUserExists() {
-        OrderHistory existing = new OrderHistory("john", new ArrayList<>());
-        when(orderHistoryRepository.findByUsername("john"))
-                .thenReturn(Optional.of(existing));
+    @DisplayName("Повторное событие (DuplicateKeyException в маркере) — история не пишется, offset ack")
+    void consume_duplicateEvent_skipped() {
+        when(processedEventRepository.insert(any(ProcessedEvent.class)))
+                .thenThrow(new DuplicateKeyException("E11000 duplicate key error"));
 
-        orderHistoryService.consume(orderDto);
+        assertThatCode(() -> orderHistoryService.consume(orderDto, ack))
+                .doesNotThrowAnyException();
 
-        verify(orderHistoryRepository).save(existing);
-        assertThat(existing.getOrders()).containsExactly(orderDto);
+        verify(mongoTemplate, never()).upsert(any(Query.class), any(Update.class), any(Class.class));
+        verify(ack).acknowledge();
+    }
+
+    @Test
+    @DisplayName("Сбой сохранения истории — маркер обработанности удаляется (компенсация), исключение наружу")
+    void consume_historySaveFails_compensatesMarker() {
+        doReturn(null).when(processedEventRepository).insert(any(ProcessedEvent.class));
+        doThrow(new RuntimeException("mongo down")).when(mongoTemplate)
+                .upsert(any(Query.class), any(Update.class), eq(OrderHistory.class));
+
+        assertThatThrownBy(() -> orderHistoryService.consume(orderDto, ack))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("mongo down");
+
+        verify(processedEventRepository).deleteById(orderDto.getEventId().toString());
+        verify(ack, never()).acknowledge();
+    }
+
+    @Test
+    @DisplayName("Событие без eventId обрабатывается без дедупликации")
+    void consume_nullEventId_processedWithoutMarker() {
+        orderDto.setEventId(null);
+
+        orderHistoryService.consume(orderDto, ack);
+
+        verify(processedEventRepository, never()).insert(any(ProcessedEvent.class));
+        verify(mongoTemplate).upsert(any(Query.class), any(Update.class), eq(OrderHistory.class));
+        verify(ack).acknowledge();
     }
 }

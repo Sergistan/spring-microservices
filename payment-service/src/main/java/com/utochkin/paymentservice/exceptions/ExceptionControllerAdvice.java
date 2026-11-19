@@ -1,6 +1,6 @@
 package com.utochkin.paymentservice.exceptions;
 
-import com.utochkin.paymentservice.requests.ErrorResponse;
+import com.utochkin.paymentservice.dto.ErrorResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -12,5 +12,11 @@ public class ExceptionControllerAdvice {
     @ExceptionHandler(CardNumberNotFoundException.class)
     public ErrorResponse handlerCardNumberNotFoundException(CardNumberNotFoundException cardNumberNotFoundException) {
         return new ErrorResponse(cardNumberNotFoundException.getMessage());
+    }
+
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(RefundNotPossibleException.class)
+    public ErrorResponse handlerRefundNotPossibleException(RefundNotPossibleException refundNotPossibleException) {
+        return new ErrorResponse(refundNotPossibleException.getMessage());
     }
 }

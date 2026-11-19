@@ -3,9 +3,21 @@ spring:
     name: config-server
   cloud:
     config:
+      discovery:
+        enabled: false
       server:
         git:
           uri: https://github.com/Sergistan/config-repo.git
           search-paths: config-repo
 server:
   port: 8071
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false

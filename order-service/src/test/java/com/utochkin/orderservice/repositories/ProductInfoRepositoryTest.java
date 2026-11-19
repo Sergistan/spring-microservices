@@ -12,12 +12,17 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import java.math.BigDecimal;
 
 @DataJpaTest(
         includeFilters = @ComponentScan.Filter(
@@ -27,12 +32,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 )
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @TestPropertySource(properties = {
-        "spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1",
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.liquibase.enabled=false"
 })
 @ActiveProfiles("test")
 public class ProductInfoRepositoryTest {
+
+    @Container
+    @ServiceConnection
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine");
 
     @Autowired
     private OrderRepository orderRepo;
@@ -44,7 +52,7 @@ public class ProductInfoRepositoryTest {
     void saveProductInfosForOrder() {
         Order order = Order.builder()
                 .orderUuid(UUID.randomUUID())
-                .totalAmount(50.0)
+                .totalAmount(BigDecimal.valueOf(50.0))
                 .orderStatus(Status.WAITING_FOR_PAYMENT)
                 .createdAt(LocalDateTime.now())
                 .build();

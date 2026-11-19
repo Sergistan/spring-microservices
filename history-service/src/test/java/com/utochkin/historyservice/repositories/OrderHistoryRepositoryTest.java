@@ -3,8 +3,8 @@ import com.utochkin.historyservice.dto.AddressDto;
 import com.utochkin.historyservice.dto.OrderDtoForKafka;
 import com.utochkin.historyservice.dto.UserDto;
 import com.utochkin.historyservice.models.OrderHistory;
-import com.utochkin.historyservice.models.OrderRequest;
-import com.utochkin.historyservice.models.Status;
+import com.utochkin.historyservice.dto.OrderRequest;
+import com.utochkin.historyservice.dto.Status;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -18,6 +18,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import java.math.BigDecimal;
 
 @DataMongoTest
 @ActiveProfiles("test")
@@ -36,13 +37,14 @@ public class OrderHistoryRepositoryTest {
 
         orderDto = new OrderDtoForKafka(
                 UUID.randomUUID(),
-                120.0,
+                BigDecimal.valueOf(120.0),
                 Status.SUCCESS,
                 LocalDateTime.now().minusDays(1),
                 LocalDateTime.now(),
                 new AddressDto("Moscow", "Arbat", 12, 45),
                 new UserDto(username, "Alice", "Smith", "alice@example.com"),
                 List.of(new OrderRequest(UUID.randomUUID(), 2)),
+                UUID.randomUUID(),
                 UUID.randomUUID()
         );
 
@@ -74,13 +76,14 @@ public class OrderHistoryRepositoryTest {
     void save_multipleOrders() {
         OrderDtoForKafka secondOrder = new OrderDtoForKafka(
                 UUID.randomUUID(),
-                230.0,
+                BigDecimal.valueOf(230.0),
                 Status.FAILED,
                 LocalDateTime.now().minusHours(2),
                 LocalDateTime.now(),
                 new AddressDto("Moscow", "Tverskaya", 7, 2),
                 new UserDto(username, "Alice", "Smith", "alice@example.com"),
                 List.of(new OrderRequest(UUID.randomUUID(), 1)),
+                UUID.randomUUID(),
                 UUID.randomUUID()
         );
 

@@ -7,10 +7,10 @@ import com.utochkin.orderservice.dto.OrderDto;
 import com.utochkin.orderservice.exceptions.OrderNotFoundException;
 import com.utochkin.orderservice.models.Status;
 import com.utochkin.orderservice.models.User;
-import com.utochkin.orderservice.request.CompositeRequest;
-import com.utochkin.orderservice.request.OrderRequest;
-import com.utochkin.orderservice.request.PaymentRequest;
-import com.utochkin.orderservice.request.PaymentResponse;
+import com.utochkin.orderservice.web.CompositeRequest;
+import com.utochkin.orderservice.web.OrderRequest;
+import com.utochkin.orderservice.web.PaymentRequest;
+import com.utochkin.orderservice.feign.PaymentResponse;
 import com.utochkin.orderservice.services.OrderService;
 import com.utochkin.orderservice.services.UserService;
 import org.junit.jupiter.api.DisplayName;
@@ -31,8 +31,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import java.math.BigDecimal;
 
 @WebMvcTest(controllers = OrderController.class)
 @Import(Config.class)
@@ -74,14 +76,14 @@ public class OrderControllerTest {
 
         given(orderService.checkOrder(requests)).willReturn(true);
 
-        OrderDto returned = new OrderDto(
-                UUID.randomUUID(), 300.0, /* status */ null, /*createdAt*/null,
+        OrderDto returned = new OrderDto(UUID.randomUUID(), BigDecimal.valueOf(300.0), /* status */ null, /*createdAt*/null,
                 address, /*userDto*/null, requests
         );
-        given(orderService.createOrder(eq(createdUser), eq(requests), eq(address)))
+        given(orderService.createOrder(eq(createdUser), any(UUID.class), eq(requests), eq(address)))
                 .willReturn(returned);
 
         mvc.perform(post("/order/api/v1/create")
+                        .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         // эмулируем заголовки из JwtTokenFilter
                         .header("X-User-SubId", "sub")
@@ -109,6 +111,7 @@ public class OrderControllerTest {
         given(orderService.checkOrder(requests)).willReturn(false);
 
         mvc.perform(post("/order/api/v1/create")
+                        .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-User-SubId", "sub")
                         .header("X-User-UserName", "login")
@@ -129,9 +132,11 @@ public class OrderControllerTest {
         PaymentRequest req = new PaymentRequest(orderUuid, "1234 5678 9012 3456");
         PaymentResponse resp = new PaymentResponse(UUID.randomUUID(), Status.SUCCESS);
 
-        given(orderService.paymentOrder(req)).willReturn(resp);
+        given(orderService.paymentOrder(req, "sub")).willReturn(resp);
 
         mvc.perform(post("/order/api/v1/pay")
+                        .with(jwt())
+                        .header("X-User-SubId", "sub")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req))
                 )
@@ -144,13 +149,32 @@ public class OrderControllerTest {
     @DisplayName("POST /order/api/v1/pay — 404, заказ не найден")
     void paymentOrder_NotFound() throws Exception {
         PaymentRequest req = new PaymentRequest(orderUuid, "1234 5678 9012 3456");
-        given(orderService.paymentOrder(req)).willThrow(new OrderNotFoundException());
+        given(orderService.paymentOrder(req, "sub")).willThrow(new OrderNotFoundException());
 
         mvc.perform(post("/order/api/v1/pay")
+                        .with(jwt())
+                        .header("X-User-SubId", "sub")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req))
                 )
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("POST /order/api/v1/pay — 403, заказ чужого пользователя")
+    void paymentOrder_ForeignOwner_Forbidden() throws Exception {
+        PaymentRequest req = new PaymentRequest(orderUuid, "1234 5678 9012 3456");
+        given(orderService.paymentOrder(req, "sub"))
+                .willThrow(new com.utochkin.orderservice.exceptions.OrderAccessDeniedException());
+
+        mvc.perform(post("/order/api/v1/pay")
+                        .with(jwt())
+                        .header("X-User-SubId", "sub")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(req))
+                )
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.messageError").value("Ошибка: заказ принадлежит другому пользователю"));
     }
 
     @Test
@@ -159,6 +183,8 @@ public class OrderControllerTest {
         PaymentRequest req = new PaymentRequest(orderUuid, "1234 5678 9012 3456");
 
         mvc.perform(post("/order/api/v1/refunded")
+                        .with(jwt())
+                        .header("X-User-SubId", "sub")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req))
                 )
@@ -171,9 +197,11 @@ public class OrderControllerTest {
     void refundedOrder_NotFound() throws Exception {
         PaymentRequest req = new PaymentRequest(orderUuid, "1234 5678 9012 3456");
         willThrow(new OrderNotFoundException())
-                .given(orderService).refundedOrder(req);
+                .given(orderService).refundedOrder(req, "sub");
 
         mvc.perform(post("/order/api/v1/refunded")
+                        .with(jwt())
+                        .header("X-User-SubId", "sub")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req))
                 )

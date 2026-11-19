@@ -1,7 +1,7 @@
 package com.utochkin.orderservice.models;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.*;
 
@@ -22,10 +22,11 @@ public class ProductInfo implements Serializable {
   private Long id;
 
   @Column(name = "article_id")
-  @NotEmpty
+  @NotNull
   private UUID articleId;
 
   @Column(name = "quantity")
+  @NotNull
   @Positive
   private Integer quantity;
 

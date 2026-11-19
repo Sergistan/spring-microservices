@@ -22,66 +22,15 @@ import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
-//@Component
-//@Slf4j
-//public class JwtTokenFilter implements GlobalFilter {
-//
-//    @Value("${jwt.public-key}")
-//    private String publicKey;
-//
-//    @SneakyThrows
-//    @Override
-//    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-//        String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
-//        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-//            String token = authHeader.substring(7);
-//            Claims claims = parseJwtToken(token); // Распарсить токен
-//
-//            // Извлекаем роли
-//            Map<String, Object> resourceAccess = claims.get("resource_access", Map.class);
-//            Map<String, Object> clientAccess = (Map<String, Object>) resourceAccess.get("spring-microservices");
-//            List<String> roles = (List<String>) clientAccess.get("roles");
-//
-//            String role = roles != null && !roles.isEmpty() ? roles.get(0) : "UNKNOWN";
-//
-//            exchange.getRequest().mutate()
-//                    .header("X-User-SubId", claims.get("sub").toString()) // ID пользователя
-//                    .header("X-User-UserName", claims.get("preferred_username").toString()) // Username пользователя
-//                    .header("X-User-FirstName", URLEncoder.encode(claims.get("given_name").toString(), StandardCharsets.UTF_8)) // Имя пользователя
-//                    .header("X-User-LastName", URLEncoder.encode(claims.get("family_name").toString(), StandardCharsets.UTF_8)) // Фамилия пользователя
-//                    .header("X-User-Email", claims.get("email").toString()) // Email пользователя
-//                    .header("X-User-Role", role) // Роль пользователя
-//                    .build();
-//        }
-//        return chain.filter(exchange);
-//    }
-//
-//    private Claims parseJwtToken(String token) throws Exception {
-//        PublicKey key = readRsaPublicKey(publicKey);
-//        return Jwts.parserBuilder()
-//                .setSigningKey(key)
-//                .build()
-//                .parseClaimsJws(token)
-//                .getBody();
-//    }
-//
-//    private static PublicKey readRsaPublicKey(String pemEncodedKey) throws Exception {
-//        // Удаляем заголовок и окончание, если они есть
-//        String publicKeyPEM = pemEncodedKey
-//                .replace("-----BEGIN PUBLIC KEY-----", "")
-//                .replace("-----END PUBLIC KEY-----", "")
-//                .replaceAll("\\s+", "");
-//
-//        byte[] decodedKey = Base64.getDecoder().decode(publicKeyPEM);
-//        X509EncodedKeySpec keySpec = new X509EncodedKeySpec(decodedKey);
-//
-//        KeyFactory keyFactory = KeyFactory.getInstance("RSA");
-//        return keyFactory.generatePublic(keySpec);
-//    }
-//}
-
-
+/**
+ * Шлюзовый фильтр после проверки JWT (resource server): раскладывает claim'ы токена
+ * в доверенные заголовки X-User-* (SubId/UserName/FirstName/LastName/Email/Role) и проксирует
+ * их в order/shop. Claim'ы извлекаются null-safe — сервисные токены client_credentials
+ * не содержат пользовательских полей (пустые строки), sub есть всегда.
+ * Заголовки можно доверять: извне они затираются (только gateway их ставит после валидации JWT).
+ */
 @Component
 @Log4j2
 public class JwtTokenFilter implements GlobalFilter, Ordered {
@@ -95,6 +44,11 @@ public class JwtTokenFilter implements GlobalFilter, Ordered {
         return Ordered.LOWEST_PRECEDENCE - 10;
     }
 
+    /**
+     * Есть Bearer -> распарсить (проверка подписи по RSA-ключу realm'а) и мутировать запрос,
+     * перезаписав заголовки X-User-* значениями из claim'ов. Перезапись = внешний
+     * спуфинг X-User-* невозможен: значение из запроса клиента заменяется нашим.
+     */
     @SneakyThrows
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
@@ -111,14 +65,15 @@ public class JwtTokenFilter implements GlobalFilter, Ordered {
 
             log.info("JwtTokenFilter: authenticated user sub={} username={}", claims.get("sub"), claims.get("preferred_username"));
 
-            // Собираем мутированный запрос
+            // Собираем мутированный запрос (клиентские токены client_credentials не содержат
+            // пользовательских claim'ов, поэтому каждый claim извлекается null-safe)
             ServerHttpRequest mutatedReq = exchange.getRequest()
                     .mutate()
-                    .header("X-User-SubId", claims.get("sub").toString())
-                    .header("X-User-UserName", claims.get("preferred_username").toString())
-                    .header("X-User-FirstName", URLEncoder.encode(claims.get("given_name").toString(), StandardCharsets.UTF_8))
-                    .header("X-User-LastName", URLEncoder.encode(claims.get("family_name").toString(), StandardCharsets.UTF_8))
-                    .header("X-User-Email", claims.get("email").toString())
+                    .header("X-User-SubId", claimOrEmpty(claims, "sub"))
+                    .header("X-User-UserName", claimOrEmpty(claims, "preferred_username"))
+                    .header("X-User-FirstName", URLEncoder.encode(claimOrEmpty(claims, "given_name"), StandardCharsets.UTF_8))
+                    .header("X-User-LastName", URLEncoder.encode(claimOrEmpty(claims, "family_name"), StandardCharsets.UTF_8))
+                    .header("X-User-Email", claimOrEmpty(claims, "email"))
                     .header("X-User-Role", extractRole(claims))
                     .build();
 
@@ -133,25 +88,39 @@ public class JwtTokenFilter implements GlobalFilter, Ordered {
         return chain.filter(exchange);
     }
 
+    /** Claim как строка; отсутствует (сервисные токены) -> пустая строка. */
+    private String claimOrEmpty(Claims claims, String name) {
+        return Objects.toString(claims.get(name), "");
+    }
+
+    /** Первая роль клиента spring-microservices из resource_access; нет -> UNKNOWN. */
     private String extractRole(Claims claims) {
         Map<String, Object> resourceAccess = claims.get("resource_access", Map.class);
+        if (resourceAccess == null) {
+            return "UNKNOWN";
+        }
         Map<String, Object> clientAccess = (Map<String, Object>) resourceAccess.get("spring-microservices");
+        if (clientAccess == null) {
+            return "UNKNOWN";
+        }
         List<String> roles = (List<String>) clientAccess.get("roles");
 
         return (roles != null && !roles.isEmpty()) ? roles.get(0) : "UNKNOWN";
     }
 
 
-        private Claims parseJwtToken(String token) throws Exception {
+    /** Разбор и проверка подписи JWT (jjwt, RSA public key realm'а из config-repo). */
+    private Claims parseJwtToken(String token) throws Exception {
         PublicKey key = readRsaPublicKey(publicKey);
 
-        return Jwts.parserBuilder()
-                .setSigningKey(key)
+        return Jwts.parser()
+                .verifyWith(key)
                 .build()
-                .parseClaimsJws(token)
-                .getBody();
+                .parseSignedClaims(token)
+                .getPayload();
     }
 
+    /** DER -> PublicKey из PEM-строки публичного ключа realm'а (JWT_PUBLIC_KEY в config-repo). */
     private static PublicKey readRsaPublicKey(String pemEncodedKey) throws Exception {
 
         String publicKeyPEM = pemEncodedKey

@@ -6,6 +6,6 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 @ResponseStatus(HttpStatus.NOT_FOUND)
 public class CardNumberNotFoundException extends RuntimeException {
     public CardNumberNotFoundException() {
-        super("Error: card number not found!");
+        super("Ошибка: карта с таким номером не найдена!");
     }
 }

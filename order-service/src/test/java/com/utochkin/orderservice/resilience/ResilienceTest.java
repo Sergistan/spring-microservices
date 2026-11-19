@@ -2,7 +2,7 @@ package com.utochkin.orderservice.resilience;
 
 import com.utochkin.orderservice.controllers.ShopController;
 import com.utochkin.orderservice.exceptions.ServiceUnavailableException;
-import com.utochkin.orderservice.request.OrderRequest;
+import com.utochkin.orderservice.web.OrderRequest;
 import com.utochkin.orderservice.services.OrderService;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
@@ -12,10 +12,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.util.List;
 import java.util.UUID;
@@ -40,8 +44,15 @@ import static org.mockito.Mockito.times;
         "resilience4j.retry.instances.retryCheckOrder.waitDuration=10ms"
 })
 @ActiveProfiles("test")
+@Testcontainers(disabledWithoutDocker = true)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 public class ResilienceTest {
+
+    // Реальный PostgreSQL в docker-контейнере: @ServiceConnection подставляет реквизиты
+    // dataSource в тестовый контекст (вместо встроенной H2; схема создаётся Hibernate)
+    @Container
+    @ServiceConnection
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine");
 
     @Autowired
     private OrderService orderService;

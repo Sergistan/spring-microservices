@@ -1,5 +1,8 @@
-FROM eclipse-temurin:23-jdk-alpine
+FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-COPY build/libs/eureka-server-*.jar eureka-server.jar
+RUN addgroup -S spring && adduser -S spring -G spring
+COPY build/libs/eureka-server-*.jar app.jar
+USER spring
 EXPOSE 8761
-ENTRYPOINT ["java", "-jar", "eureka-server.jar"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=5 CMD wget -qO- http://localhost:8761/actuator/health | grep -q '"status":"UP"' || exit 1
+ENTRYPOINT ["java", "-jar", "app.jar"]

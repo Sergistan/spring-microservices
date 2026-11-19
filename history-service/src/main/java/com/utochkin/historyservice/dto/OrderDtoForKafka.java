@@ -1,8 +1,8 @@
 package com.utochkin.historyservice.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
-import com.utochkin.historyservice.models.OrderRequest;
-import com.utochkin.historyservice.models.Status;
+import com.utochkin.historyservice.dto.OrderRequest;
+import com.utochkin.historyservice.dto.Status;
 import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -14,6 +14,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.math.BigDecimal;
 
 @Data
 @AllArgsConstructor
@@ -23,7 +24,7 @@ public class OrderDtoForKafka implements Serializable {
     private UUID orderUuid;
 
     @Positive
-    private Double totalAmount;
+    private BigDecimal totalAmount;
 
     private Status orderStatus;
 
@@ -43,4 +44,7 @@ public class OrderDtoForKafka implements Serializable {
 
     @Field(targetType = FieldType.STRING)
     private UUID paymentId;
+
+    @Field(targetType = FieldType.STRING)
+    private UUID eventId;
 }

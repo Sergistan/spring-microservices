@@ -24,6 +24,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.ServerResponse;
 
+import java.net.URI;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.PrivateKey;
@@ -42,7 +43,8 @@ import static org.springframework.web.reactive.function.server.RouterFunctions.r
 @AutoConfigureWebTestClient
 @Import({
         GatewayEndpointsTest.TestSecurityConfig.class,
-        GatewayEndpointsTest.FakeRouterConfig.class
+        GatewayEndpointsTest.FakeRouterConfig.class,
+        com.utochkin.getawayserver.config.CorsConfig.class
 })
 
 class GatewayEndpointsTest {
@@ -110,6 +112,28 @@ class GatewayEndpointsTest {
                 .expectBody(String.class).isEqualTo("[]");
     }
 
+    @Test
+    @DisplayName("CORS preflight с разрешённого origin — Access-Control-Allow-Origin возвращается")
+    void corsPreflight_allowedOrigin() {
+        client.options().uri(URI.create("http://localhost:8072/order/api/v1/orders"))
+                .header(HttpHeaders.ORIGIN, "http://localhost:3000")
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().valueEquals(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3000");
+    }
+
+    @Test
+    @DisplayName("CORS preflight с постороннего origin — запрещён (403, без Allow-Origin)")
+    void corsPreflight_forbiddenOrigin() {
+        client.options().uri(URI.create("http://localhost:8072/order/api/v1/orders"))
+                .header(HttpHeaders.ORIGIN, "http://evil.example")
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectHeader().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN);
+    }
+
     // Разбить длинную Base64-строку на строки по 64 символа
     private static String chunk(String s) {
         StringBuilder sb = new StringBuilder();
@@ -135,7 +159,7 @@ class GatewayEndpointsTest {
             return http.build();
         }
 
-        // Order API — JWT
+        // Order API — JWT (+ CORS до аутентификации, как в основном ReactiveConfig)
         @Bean
         @Order(2)
         public SecurityWebFilterChain orderChain(ServerHttpSecurity http,

@@ -4,21 +4,57 @@ import com.utochkin.notificationservice.dto.OrderDtoForKafka;
 import lombok.AllArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Service;
 
 import java.util.stream.Collectors;
 
+/**
+ * Консьюмер события topic-orders -> email-уведомление пользователю.
+ * Порядок веток: без eventId -> отправляем сразу; дубль (Redis) -> пропускаем;
+ * иначе отправка и только при успехе ack (MANUAL_IMMEDIATE). Сбой отправки:
+ * ключ дедупликации освобождается, ack НЕ делается -> ретраи -> topic-orders.DLT.
+ */
 @Service
 @AllArgsConstructor
 @Log4j2
 public class NotificationConsumer {
 
     private final EmailService emailService;
+    private final RedisProcessedEventsStore processedEventsStore;
 
+    /** Приём события: дедупликация по eventId -> отправка письма -> ack (см. javadoc класса). */
     @KafkaListener(topics = "topic-orders", groupId = "notification-group")
-    public void onOrderEvent(OrderDtoForKafka orderDto) {
+    public void onOrderEvent(OrderDtoForKafka orderDto, Acknowledgment ack) {
         log.info("NotificationConsumer: получено сообщение из Kafka: {}", orderDto);
 
+        if (orderDto.getEventId() == null) {
+            log.warn("NotificationConsumer: событие без eventId для заказа {} — обрабатываем без дедупликации", orderDto.getOrderUuid());
+            sendNotification(orderDto);
+            ack.acknowledge();
+            return;
+        }
+
+        if (!processedEventsStore.tryAcquire(orderDto.getEventId())) {
+            log.info("NotificationConsumer: событие {} для заказа {} уже обработано — пропускаем (дедупликация)",
+                    orderDto.getEventId(), orderDto.getOrderUuid());
+            ack.acknowledge();
+            return;
+        }
+
+        try {
+            sendNotification(orderDto);
+            ack.acknowledge();
+        } catch (Exception e) {
+            processedEventsStore.release(orderDto.getEventId());
+            log.warn("NotificationConsumer: не удалось отправить уведомление для события {} — ключ дедупликации освобождён для повторной обработки",
+                    orderDto.getEventId());
+            throw e;
+        }
+    }
+
+    /** Отправка письма на email из события (нет email -> warn и пропуск, это не ошибка). */
+    private void sendNotification(OrderDtoForKafka orderDto) {
         String recipientEmail = orderDto.getUserDto().email();
         if (recipientEmail != null && !recipientEmail.isEmpty()) {
             String subject = "Номер заказа " + orderDto.getOrderUuid();
@@ -29,7 +65,8 @@ public class NotificationConsumer {
         }
     }
 
-        private String createEmailText(OrderDtoForKafka orderDto) {
+        /** Текст письма по статусу: SUCCESS — детали/адрес/позиции, FAILED и REFUNDED — короткие шаблоны. */
+    private String createEmailText(OrderDtoForKafka orderDto) {
             log.debug("NotificationConsumer: формируем текст письма для заказа {}", orderDto.getOrderUuid());
 
             StringBuilder sb = new StringBuilder();

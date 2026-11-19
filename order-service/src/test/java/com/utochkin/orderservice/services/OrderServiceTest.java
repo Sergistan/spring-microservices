@@ -8,7 +8,10 @@ import com.utochkin.orderservice.dto.OrderDtoForKafka;
 import com.utochkin.orderservice.dto.UserDto;
 import com.utochkin.orderservice.exceptions.FailedOrderStatusException;
 import com.utochkin.orderservice.exceptions.FailedPayOrderException;
+import com.utochkin.orderservice.exceptions.OrderAccessDeniedException;
 import com.utochkin.orderservice.exceptions.OrderNotFoundException;
+import com.utochkin.orderservice.exceptions.ProductUnavailableException;
+import com.utochkin.orderservice.exceptions.ServiceUnavailableException;
 import com.utochkin.orderservice.mappers.AddressMapper;
 import com.utochkin.orderservice.mappers.OrderMapper;
 import com.utochkin.orderservice.mappers.ProductInfoMapper;
@@ -16,9 +19,12 @@ import com.utochkin.orderservice.mappers.UserMapper;
 import com.utochkin.orderservice.models.*;
 import com.utochkin.orderservice.repositories.OrderRepository;
 import com.utochkin.orderservice.repositories.ProductInfoRepository;
-import com.utochkin.orderservice.request.OrderRequest;
-import com.utochkin.orderservice.request.PaymentRequest;
-import com.utochkin.orderservice.request.PaymentResponse;
+import com.utochkin.orderservice.feign.OrderPaymentsResponse;
+import com.utochkin.orderservice.web.OrderRequest;
+import com.utochkin.orderservice.web.PaymentRequest;
+import com.utochkin.orderservice.feign.PaymentResponse;
+import com.utochkin.orderservice.feign.StockChangeRequest;
+import feign.FeignException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,18 +36,25 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.http.HttpStatus;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.*;
+import java.math.BigDecimal;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -72,7 +85,10 @@ public class OrderServiceTest {
     private AddressMapper addressMapper;
 
     @Mock
-    private KafkaSenderService kafkaSenderService;
+    private OutboxService outboxService;
+
+    @Mock
+    private TransactionTemplate transactionTemplate;
 
     @InjectMocks
     private OrderService orderService;
@@ -107,14 +123,14 @@ public class OrderServiceTest {
         order.setOrderStatus(Status.WAITING_FOR_PAYMENT);
         order.setCreatedAt(LocalDateTime.now());
         order.setProductInfos(productInfos);
-        order.setUser(new User());
+        order.setUser(User.builder().id(2L).subId("owner-sub").username("bob").build());
         order.setAddress(new Address());
 
 
         given(orderRepository.findByOrderUuid(uuid))
                 .willReturn(Optional.of(order));
         given(orderRepository.findTotalAmountByOrderUuid(uuid))
-                .willReturn(100.0);
+                .willReturn(BigDecimal.valueOf(100.0));
         given(orderRepository.save(any()))
                 .willAnswer(inv -> inv.getArgument(0));
 
@@ -124,11 +140,22 @@ public class OrderServiceTest {
                 .willReturn(new UserDto("bob", "", "", ""));
         given(orderMapper.toDtoForKafka(any(), any(), any(), any()))
                 .willReturn(new OrderDtoForKafka(
-                        uuid, 100.0, Status.REFUNDED,
+                        uuid, BigDecimal.valueOf(100.0), Status.REFUNDED,
                         order.getCreatedAt(), LocalDateTime.now(),
                         addrDto, new UserDto("bob", "", "", ""),
-                        orderRequests, UUID.randomUUID()
+                        orderRequests, UUID.randomUUID(), UUID.randomUUID()
                 ));
+
+        given(transactionTemplate.execute(any()))
+                .willAnswer(inv -> {
+                    TransactionCallback<?> callback = inv.getArgument(0);
+                    return callback.doInTransaction(null);
+                });
+        doAnswer(inv -> {
+            Consumer<org.springframework.transaction.TransactionStatus> consumer = inv.getArgument(0);
+            consumer.accept(null);
+            return null;
+        }).when(transactionTemplate).executeWithoutResult(any());
     }
 
     @Test
@@ -145,25 +172,72 @@ public class OrderServiceTest {
 
         given(addressMapper.toEntity(addrDto)).willReturn(new Address());
         given(productInfoMapper.toListEntity(orderRequests)).willReturn(productInfos);
-        given(orderRepository.save(any(Order.class))).willAnswer(inv -> {
+        given(orderRepository.saveAndFlush(any(Order.class))).willAnswer(inv -> {
             Order o = inv.getArgument(0);
             o.setId(5L);
             return o;
         });
-        given(shopController.getSumTotalPriceOrder(orderRequests)).willReturn(123.0);
+        given(shopController.getSumTotalPriceOrder(orderRequests)).willReturn(BigDecimal.valueOf(123.0));
 
-        OrderDto expectedDto = new OrderDto(
-                order.getOrderUuid(), 123.0, Status.WAITING_FOR_PAYMENT,
+        OrderDto expectedDto = new OrderDto(order.getOrderUuid(), BigDecimal.valueOf(123.0), Status.WAITING_FOR_PAYMENT,
                 order.getCreatedAt(), addrDto, new UserDto("bob", "", "", ""), orderRequests
         );
         given(orderMapper.toDto(any(), any(), any(), any())).willReturn(expectedDto);
 
 
-        OrderDto actual = orderService.createOrder(user, orderRequests, addrDto);
+        OrderDto actual = orderService.createOrder(user, uuid, orderRequests, addrDto);
 
         assertThat(actual).isEqualTo(expectedDto);
 
-        then(kafkaSenderService).should(never()).send(any());
+        then(shopController).should().changeTotalQuantityProductsAfterCreateOrder(new StockChangeRequest(uuid, orderRequests));
+        then(outboxService).should(never()).saveToOutbox(any());
+    }
+
+    @Test
+    @DisplayName("createOrder: повторная попытка с тем же orderUuid доворячивает подтверждение списания (идемпотентность)")
+    void createOrder_duplicateUuid_finalizesStockIdempotently() {
+        order.setId(7L);
+        given(orderRepository.saveAndFlush(any(Order.class)))
+                .willThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate order_uuid"));
+        given(orderRepository.findByOrderUuid(uuid)).willReturn(Optional.of(order));
+
+        OrderDto expectedDto = new OrderDto(uuid, BigDecimal.valueOf(100.0), Status.WAITING_FOR_PAYMENT,
+                order.getCreatedAt(), addrDto, new UserDto("bob", "", "", ""), orderRequests
+        );
+        given(orderMapper.toDto(any(), any(), any(), any())).willReturn(expectedDto);
+
+        OrderDto actual = orderService.createOrder(user, uuid, orderRequests, addrDto);
+
+        assertThat(actual).isEqualTo(expectedDto);
+        then(shopController).should().changeTotalQuantityProductsAfterCreateOrder(any(StockChangeRequest.class));
+        then(orderRepository).should().transitionStatus(eq(uuid), eq(List.of(Status.STOCK_PENDING)), eq(Status.WAITING_FOR_PAYMENT));
+    }
+
+    @Test
+    @DisplayName("fallback createOrder: Feign 409 (недостаток товара) → ProductUnavailableException")
+    void fallbackCreateOrder_feign409_productUnavailable() {
+        FeignException fe = org.mockito.Mockito.mock(FeignException.class);
+        org.mockito.Mockito.when(fe.status()).thenReturn(409);
+
+        assertThrows(ProductUnavailableException.class,
+                () -> orderService.fallbackMethodCreateOrder(user, uuid, orderRequests, addrDto, fe));
+    }
+
+    @Test
+    @DisplayName("fallback createOrder: Feign 404 (товар не найден) → ProductUnavailableException")
+    void fallbackCreateOrder_feign404_productUnavailable() {
+        FeignException fe = org.mockito.Mockito.mock(FeignException.class);
+        org.mockito.Mockito.when(fe.status()).thenReturn(404);
+
+        assertThrows(ProductUnavailableException.class,
+                () -> orderService.fallbackMethodCreateOrder(user, uuid, orderRequests, addrDto, fe));
+    }
+
+    @Test
+    @DisplayName("fallback createOrder: прочие сбои → ServiceUnavailableException")
+    void fallbackCreateOrder_otherError_serviceUnavailable() {
+        assertThrows(ServiceUnavailableException.class,
+                () -> orderService.fallbackMethodCreateOrder(user, uuid, orderRequests, addrDto, new RuntimeException("boom")));
     }
 
     @Test
@@ -177,7 +251,7 @@ public class OrderServiceTest {
 
         FailedOrderStatusException ex = assertThrows(
                 FailedOrderStatusException.class,
-                () -> orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"))
+                () -> orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"), "owner-sub")
         );
         assertThat(ex.getMessage()).isEqualTo("Заказ уже оплачен!");
 
@@ -195,7 +269,7 @@ public class OrderServiceTest {
 
         FailedOrderStatusException ex = assertThrows(
                 FailedOrderStatusException.class,
-                () -> orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"))
+                () -> orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"), "owner-sub")
         );
         assertThat(ex.getMessage()).isEqualTo("Заказ отменен, необходимо создать новый заказ!");
         then(paymentController).should(never()).paymentOrder(any());
@@ -209,9 +283,9 @@ public class OrderServiceTest {
 
         OrderNotFoundException ex = assertThrows(
                 OrderNotFoundException.class,
-                () -> orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"))
+                () -> orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"), "owner-sub")
         );
-        assertThat(ex.getMessage()).isEqualTo("Error: order not found!");
+        assertThat(ex.getMessage()).isEqualTo("Ошибка: заказ не найден!");
     }
 
     @Test
@@ -222,20 +296,21 @@ public class OrderServiceTest {
         order.setOrderStatus(Status.WAITING_FOR_PAYMENT);
 
         given(orderRepository.findByOrderUuid(uuid)).willReturn(Optional.of(order));
+        given(orderRepository.transitionStatus(eq(uuid), anyList(), eq(Status.PROCESSING))).willReturn(1);
 
         PaymentResponse success = new PaymentResponse(UUID.randomUUID(), Status.SUCCESS);
         given(paymentController.paymentOrder(any())).willReturn(success);
         given(orderMapper.toDtoForKafka(any(), any(), any(), any()))
                 .willReturn(new OrderDtoForKafka(
-                        uuid, 100.0, Status.SUCCESS,
+                        uuid, BigDecimal.valueOf(100.0), Status.SUCCESS,
                         order.getCreatedAt(), LocalDateTime.now(),
-                        addrDto, new UserDto("bob", "", "", ""), orderRequests, success.getPaymentId()
+                        addrDto, new UserDto("bob", "", "", ""), orderRequests, success.getPaymentId(), UUID.randomUUID()
                 ));
 
-        PaymentResponse resp = orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"));
+        PaymentResponse resp = orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"), "owner-sub");
 
         assertThat(resp).isEqualTo(success);
-        then(kafkaSenderService).should().send(any(OrderDtoForKafka.class));
+        then(outboxService).should().saveToOutbox(any(OrderDtoForKafka.class));
     }
 
     @Test
@@ -246,20 +321,62 @@ public class OrderServiceTest {
         order.setOrderStatus(Status.WAITING_FOR_PAYMENT);
 
         given(orderRepository.findByOrderUuid(uuid)).willReturn(Optional.of(order));
+        given(orderRepository.transitionStatus(eq(uuid), anyList(), eq(Status.PROCESSING))).willReturn(1);
 
         PaymentResponse failed = new PaymentResponse(UUID.randomUUID(), Status.FAILED);
         given(paymentController.paymentOrder(any())).willReturn(failed);
         given(orderMapper.toDtoForKafka(any(), any(), any(), any()))
                 .willReturn(new OrderDtoForKafka(
-                        uuid, 100.0, Status.FAILED,
+                        uuid, BigDecimal.valueOf(100.0), Status.FAILED,
                         order.getCreatedAt(), LocalDateTime.now(),
-                        addrDto, new UserDto("bob", "", "", ""), orderRequests, failed.getPaymentId()
+                        addrDto, new UserDto("bob", "", "", ""), orderRequests, failed.getPaymentId(), UUID.randomUUID()
                 ));
 
         assertThrows(FailedPayOrderException.class, () ->
-                orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"))
+                orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"), "owner-sub")
         );
-        then(kafkaSenderService).should().send(any(OrderDtoForKafka.class));
+        then(outboxService).should().saveToOutbox(any(OrderDtoForKafka.class));
+    }
+
+    @Test
+    @DisplayName("paymentOrder → CAS вернул 0 строк (конкурентная оплата) → исключение, вызова payment нет")
+    void paymentOrder_casRejected_ThrowsAndNoPaymentCall() {
+
+        given(orderRepository.findByOrderUuid(uuid)).willReturn(Optional.of(order));
+        given(orderRepository.transitionStatus(eq(uuid), anyList(), eq(Status.PROCESSING))).willReturn(0);
+
+        FailedOrderStatusException ex = assertThrows(
+                FailedOrderStatusException.class,
+                () -> orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"), "owner-sub")
+        );
+        assertThat(ex.getMessage()).isEqualTo("Заказ уже оплачен!");
+
+        then(paymentController).should(never()).paymentOrder(any());
+        then(outboxService).should(never()).saveToOutbox(any());
+    }
+
+    @Test
+    @DisplayName("paymentOrder → статус PROCESSING (повтор после сбоя) допускает повторную попытку")
+    void paymentOrder_processingStatus_retryAllowed() {
+
+        order.setOrderStatus(Status.PROCESSING);
+
+        given(orderRepository.findByOrderUuid(uuid)).willReturn(Optional.of(order));
+        given(orderRepository.transitionStatus(eq(uuid), anyList(), eq(Status.PROCESSING))).willReturn(1);
+
+        PaymentResponse success = new PaymentResponse(UUID.randomUUID(), Status.SUCCESS);
+        given(paymentController.paymentOrder(any())).willReturn(success);
+        given(orderMapper.toDtoForKafka(any(), any(), any(), any()))
+                .willReturn(new OrderDtoForKafka(
+                        uuid, BigDecimal.valueOf(100.0), Status.SUCCESS,
+                        order.getCreatedAt(), LocalDateTime.now(),
+                        addrDto, new UserDto("bob", "", "", ""), orderRequests, success.getPaymentId(), UUID.randomUUID()
+                ));
+
+        PaymentResponse resp = orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"), "owner-sub");
+
+        assertThat(resp.getStatus()).isEqualTo(Status.SUCCESS);
+        then(paymentController).should().paymentOrder(any());
     }
 
     @Test
@@ -267,12 +384,12 @@ public class OrderServiceTest {
     void refundedOrder_notFound_throws() {
         given(orderRepository.findByOrderUuid(uuid)).willReturn(Optional.empty());
         assertThrows(OrderNotFoundException.class,
-                () -> orderService.refundedOrder(new PaymentRequest(uuid, "5078 6038 0721 8893"))
+                () -> orderService.refundedOrder(new PaymentRequest(uuid, "5078 6038 0721 8893"), "owner-sub")
         );
     }
 
-    @ParameterizedTest(name = "refundedOrder со статусами: WAITING_FOR_PAYMENT, FAILED, REFUNDED → выдает исключение FailedOrderStatusException")
-    @EnumSource(value = Status.class, names = {"WAITING_FOR_PAYMENT", "FAILED", "REFUNDED"})
+    @ParameterizedTest(name = "refundedOrder со статусами: WAITING_FOR_PAYMENT, PROCESSING, FAILED, REFUNDED → выдает исключение FailedOrderStatusException")
+    @EnumSource(value = Status.class, names = {"WAITING_FOR_PAYMENT", "PROCESSING", "FAILED", "REFUNDED"})
     void refundedOrder_invalidStatus_throws(Status badStatus) {
         order.setOrderStatus(badStatus);
 
@@ -280,15 +397,16 @@ public class OrderServiceTest {
 
         FailedOrderStatusException ex = assertThrows(
                 FailedOrderStatusException.class,
-                () -> orderService.refundedOrder(new PaymentRequest(uuid, "5078 6038 0721 8893"))
+                () -> orderService.refundedOrder(new PaymentRequest(uuid, "5078 6038 0721 8893"), "owner-sub")
         );
         assertThat(ex.getMessage())
                 .isEqualTo("Заказ нельзя отменить, т.к. он не был оплачен!");
 
         then(paymentController).should(never()).refundedOrder(any());
-        then(shopController).should(never()).changeTotalQuantityProductsAfterRefundedOrder(anyList());
+        then(orderRepository).should(never()).transitionStatus(any(), anyList(), any());
+        then(shopController).should(never()).changeTotalQuantityProductsAfterRefundedOrder(any(StockChangeRequest.class));
         then(productInfoRepository).should(never()).deleteAllById(anyList());
-        then(kafkaSenderService).should(never()).send(any());
+        then(outboxService).should(never()).saveToOutbox(any());
     }
 
     @Test
@@ -296,23 +414,41 @@ public class OrderServiceTest {
     void refundedOrder_successfulPath() {
         order.setOrderStatus(Status.SUCCESS);
         given(orderRepository.findByOrderUuid(uuid)).willReturn(Optional.of(order));
-        given(orderRepository.findTotalAmountByOrderUuid(uuid)).willReturn(100.0);
+        given(orderRepository.findTotalAmountByOrderUuid(uuid)).willReturn(BigDecimal.valueOf(100.0));
+        given(orderRepository.transitionStatus(eq(uuid), anyList(), eq(Status.PROCESSING))).willReturn(1);
 
         PaymentResponse pr = new PaymentResponse(UUID.randomUUID(), Status.REFUNDED);
         given(paymentController.refundedOrder(any())).willReturn(pr);
 
-        orderService.refundedOrder(new PaymentRequest(uuid, "5078 6038 0721 8893"));
+        orderService.refundedOrder(new PaymentRequest(uuid, "5078 6038 0721 8893"), "owner-sub");
 
         then(shopController).should()
-                .changeTotalQuantityProductsAfterRefundedOrder(
+                .changeTotalQuantityProductsAfterRefundedOrder(new StockChangeRequest(uuid,
                         List.of(new OrderRequest(
                                 productInfos.get(0).getArticleId(),
                                 productInfos.get(0).getQuantity()
                         ))
-                );
+                ));
         then(productInfoRepository).should().deleteAllById(List.of(42L));
         then(orderRepository).should(times(1)).save(order);
-        then(kafkaSenderService).should().send(any(OrderDtoForKafka.class));
+        then(outboxService).should().saveToOutbox(any(OrderDtoForKafka.class));
+    }
+
+    @Test
+    @DisplayName("refundedOrder → CAS вернул 0 строк (конкурентный возврат) → исключение без вызова payment")
+    void refundedOrder_casRejected_ThrowsAndNoRefundCall() {
+        order.setOrderStatus(Status.SUCCESS);
+        given(orderRepository.findByOrderUuid(uuid)).willReturn(Optional.of(order));
+        given(orderRepository.transitionStatus(eq(uuid), anyList(), eq(Status.PROCESSING))).willReturn(0);
+
+        FailedOrderStatusException ex = assertThrows(
+                FailedOrderStatusException.class,
+                () -> orderService.refundedOrder(new PaymentRequest(uuid, "5078 6038 0721 8893"), "owner-sub")
+        );
+        assertThat(ex.getMessage()).isEqualTo("Заказ нельзя отменить, т.к. он не был оплачен!");
+
+        then(paymentController).should(never()).refundedOrder(any());
+        then(outboxService).should(never()).saveToOutbox(any());
     }
 
     @Test
@@ -320,16 +456,192 @@ public class OrderServiceTest {
     void refundedOrder_nonRefundedResponse_noSideEffects() {
         order.setOrderStatus(Status.SUCCESS);
         given(orderRepository.findByOrderUuid(uuid)).willReturn(Optional.of(order));
-        given(orderRepository.findTotalAmountByOrderUuid(uuid)).willReturn(100.0);
+        given(orderRepository.findTotalAmountByOrderUuid(uuid)).willReturn(BigDecimal.valueOf(100.0));
+        given(orderRepository.transitionStatus(eq(uuid), anyList(), eq(Status.PROCESSING))).willReturn(1);
 
         PaymentResponse pr = new PaymentResponse(UUID.randomUUID(), Status.FAILED);
         given(paymentController.refundedOrder(any())).willReturn(pr);
 
-        orderService.refundedOrder(new PaymentRequest(uuid, "5078 6038 0721 8893"));
+        orderService.refundedOrder(new PaymentRequest(uuid, "5078 6038 0721 8893"), "owner-sub");
 
-        then(shopController).should(never()).changeTotalQuantityProductsAfterRefundedOrder(anyList());
+        then(shopController).should(never()).changeTotalQuantityProductsAfterRefundedOrder(any(StockChangeRequest.class));
         then(productInfoRepository).should(never()).deleteAllById(anyList());
         then(orderRepository).should(never()).save(order);
-        then(kafkaSenderService).should(never()).send(any());
+        then(outboxService).should(never()).saveToOutbox(any());
+    }
+
+    @Test
+    @DisplayName("reconcileStuckOrder → refunded=true → REFUNDED: восстановление остатков, удаление позиций, событие в outbox")
+    void reconcileStuckOrder_refunded_finalizesRefunded() {
+        order.setOrderStatus(Status.PROCESSING);
+        OrderPaymentsResponse payments = new OrderPaymentsResponse(uuid, true, true, UUID.randomUUID());
+
+        orderService.reconcileStuckOrder(order, payments);
+
+        assertThat(order.getOrderStatus()).isEqualTo(Status.REFUNDED);
+        then(shopController).should().changeTotalQuantityProductsAfterRefundedOrder(any(StockChangeRequest.class));
+        then(productInfoRepository).should().deleteAllById(anyList());
+        then(outboxService).should().saveToOutbox(any(OrderDtoForKafka.class));
+    }
+
+    @Test
+    @DisplayName("reconcileStuckOrder → paid=true → SUCCESS: без возврата товара, событие в outbox")
+    void reconcileStuckOrder_paid_finalizesSuccess() {
+        order.setOrderStatus(Status.PROCESSING);
+        OrderPaymentsResponse payments = new OrderPaymentsResponse(uuid, true, false, UUID.randomUUID());
+
+        orderService.reconcileStuckOrder(order, payments);
+
+        assertThat(order.getOrderStatus()).isEqualTo(Status.SUCCESS);
+        assertThat(order.getPaymentId()).isEqualTo(payments.paymentId());
+        then(shopController).should(never()).changeTotalQuantityProductsAfterRefundedOrder(any(StockChangeRequest.class));
+        then(outboxService).should().saveToOutbox(any(OrderDtoForKafka.class));
+    }
+
+    @Test
+    @DisplayName("reconcileStuckOrder → платежа нет → CAS PROCESSING→WAITING_FOR_PAYMENT, без событий")
+    void reconcileStuckOrder_noPayment_releasesToWaiting() {
+        order.setOrderStatus(Status.PROCESSING);
+        OrderPaymentsResponse payments = new OrderPaymentsResponse(uuid, false, false, null);
+
+        orderService.reconcileStuckOrder(order, payments);
+
+        then(orderRepository).should().transitionStatus(eq(uuid), eq(List.of(Status.PROCESSING)), eq(Status.WAITING_FOR_PAYMENT));
+        then(outboxService).should(never()).saveToOutbox(any());
+    }
+
+    @Test
+    @DisplayName("reconcileStuckOrder → конкурент успел изменить статус → rollback без событий и сохранения")
+    void reconcileStuckOrder_statusChangedByConcurrent_rollsBack() {
+        order.setOrderStatus(Status.SUCCESS);
+        OrderPaymentsResponse payments = new OrderPaymentsResponse(uuid, true, false, UUID.randomUUID());
+
+        org.springframework.transaction.TransactionStatus txStatus = mock(org.springframework.transaction.TransactionStatus.class);
+        doAnswer(inv -> {
+            Consumer<org.springframework.transaction.TransactionStatus> consumer = inv.getArgument(0);
+            consumer.accept(txStatus);
+            return null;
+        }).when(transactionTemplate).executeWithoutResult(any());
+
+        orderService.reconcileStuckOrder(order, payments);
+
+        verify(txStatus).setRollbackOnly();
+        then(outboxService).should(never()).saveToOutbox(any());
+        then(orderRepository).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("createOrder: товар недоступен (Feign 409) → заказ переведён в FAILED, ProductUnavailable наружу")
+    void createOrder_productUnavailable_marksFailed() {
+        given(productInfoMapper.toListEntity(orderRequests)).willReturn(productInfos);
+        FeignException fe = mock(FeignException.class);
+        when(fe.status()).thenReturn(HttpStatus.CONFLICT.value());
+        doThrow(fe).when(shopController).changeTotalQuantityProductsAfterCreateOrder(any(StockChangeRequest.class));
+
+        assertThrows(ProductUnavailableException.class,
+                () -> orderService.createOrder(user, uuid, orderRequests, addrDto));
+
+        then(orderRepository).should().transitionStatus(uuid, List.of(Status.STOCK_PENDING), Status.FAILED);
+        then(outboxService).should(never()).saveToOutbox(any());
+    }
+
+    @Test
+    @DisplayName("paymentOrder → STOCK_PENDING отклоняется с внятным сообщением, payment не вызывается")
+    void paymentOrder_stockPending_rejectedWithMessage() {
+        order.setOrderStatus(Status.STOCK_PENDING);
+        given(orderRepository.findByOrderUuid(uuid)).willReturn(Optional.of(order));
+
+        FailedOrderStatusException ex = assertThrows(
+                FailedOrderStatusException.class,
+                () -> orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"), "owner-sub")
+        );
+        assertThat(ex.getMessage()).isEqualTo("Заказ ещё подтверждается, попробуйте позже");
+
+        then(paymentController).should(never()).paymentOrder(any());
+    }
+
+    @Test
+    @DisplayName("refundedOrder → STOCK_PENDING отклоняется как неоплаченный")
+    void refundedOrder_stockPending_rejected() {
+        order.setOrderStatus(Status.STOCK_PENDING);
+        given(orderRepository.findByOrderUuid(uuid)).willReturn(Optional.of(order));
+
+        FailedOrderStatusException ex = assertThrows(
+                FailedOrderStatusException.class,
+                () -> orderService.refundedOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"), "owner-sub")
+        );
+        assertThat(ex.getMessage()).isEqualTo("Заказ нельзя отменить, т.к. он не был оплачен!");
+
+        then(paymentController).should(never()).refundedOrder(any());
+    }
+
+    @Test
+    @DisplayName("reconcile: STOCK_PENDING → повтор подтверждения списания, payment не опрашивается")
+    void reconcile_stockPending_finalizesStockWithoutPaymentPoll() {
+        order.setOrderStatus(Status.STOCK_PENDING);
+
+        orderService.reconcile(order);
+
+        then(shopController).should().changeTotalQuantityProductsAfterCreateOrder(any(StockChangeRequest.class));
+        then(orderRepository).should().transitionStatus(uuid, List.of(Status.STOCK_PENDING), Status.WAITING_FOR_PAYMENT);
+        then(paymentController).should(never()).getOrderPayments(any());
+    }
+
+    @Test
+    @DisplayName("reconcile: STOCK_PENDING и товар недоступен → FAILED, исключение проглочено (для джобы)")
+    void reconcile_stockPending_productUnavailable_marksFailed() {
+        order.setOrderStatus(Status.STOCK_PENDING);
+        FeignException fe = mock(FeignException.class);
+        when(fe.status()).thenReturn(HttpStatus.NOT_FOUND.value());
+        doThrow(fe).when(shopController).changeTotalQuantityProductsAfterCreateOrder(any(StockChangeRequest.class));
+
+        assertThatCode(() -> orderService.reconcile(order))
+                .doesNotThrowAnyException();
+
+        then(orderRepository).should().transitionStatus(uuid, List.of(Status.STOCK_PENDING), Status.FAILED);
+    }
+
+    @Test
+    @DisplayName("reconcile: PROCESSING → опрос payment и делегирование в reconcileStuckOrder")
+    void reconcile_processing_pollsPaymentsAndReleasesWhenUnpaid() {
+        order.setOrderStatus(Status.PROCESSING);
+        given(paymentController.getOrderPayments(uuid))
+                .willReturn(new OrderPaymentsResponse(uuid, false, false, null));
+        given(orderRepository.transitionStatus(eq(uuid), anyList(), eq(Status.WAITING_FOR_PAYMENT))).willReturn(1);
+
+        orderService.reconcile(order);
+
+        then(paymentController).should().getOrderPayments(uuid);
+        then(orderRepository).should().transitionStatus(eq(uuid), eq(List.of(Status.PROCESSING)), eq(Status.WAITING_FOR_PAYMENT));
+    }
+
+    @Test
+    @DisplayName("paymentOrder: чужой subId → OrderAccessDeniedException, payment не вызывается")
+    void paymentOrder_foreignSubId_thrownAccessDenied() {
+        order.setOrderStatus(Status.WAITING_FOR_PAYMENT);
+
+        OrderAccessDeniedException ex = assertThrows(
+                OrderAccessDeniedException.class,
+                () -> orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"), "someone-else")
+        );
+        assertThat(ex.getMessage()).isEqualTo("Ошибка: заказ принадлежит другому пользователю");
+
+        then(paymentController).should(never()).paymentOrder(any());
+        then(orderRepository).should(never()).transitionStatus(any(), anyList(), any());
+    }
+
+    @Test
+    @DisplayName("refundedOrder: чужой subId → OrderAccessDeniedException, refund не вызывается")
+    void refundedOrder_foreignSubId_thrownAccessDenied() {
+        order.setOrderStatus(Status.SUCCESS);
+
+        OrderAccessDeniedException ex = assertThrows(
+                OrderAccessDeniedException.class,
+                () -> orderService.refundedOrder(new PaymentRequest(uuid, "5078 6038 0721 8893"), "someone-else")
+        );
+        assertThat(ex.getMessage()).isEqualTo("Ошибка: заказ принадлежит другому пользователю");
+
+        then(paymentController).should(never()).refundedOrder(any());
+        then(shopController).should(never()).changeTotalQuantityProductsAfterRefundedOrder(any(StockChangeRequest.class));
     }
 }

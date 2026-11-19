@@ -1,72 +1,98 @@
 package com.utochkin.paymentservice.services;
 
-
 import com.utochkin.paymentservice.exceptions.CardNumberNotFoundException;
-import com.utochkin.paymentservice.models.Account;
-import com.utochkin.paymentservice.models.PaymentResponse;
+import com.utochkin.paymentservice.dto.OrderPaymentsResponse;
+import com.utochkin.paymentservice.models.Payment;
+import com.utochkin.paymentservice.models.PaymentType;
+import com.utochkin.paymentservice.dto.PaymentResponse;
 import com.utochkin.paymentservice.models.Status;
-import com.utochkin.paymentservice.repositories.AccountRepository;
-import com.utochkin.paymentservice.requests.AccountRequest;
+import com.utochkin.paymentservice.repositories.PaymentRepository;
+import com.utochkin.paymentservice.web.AccountRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
+import java.util.Optional;
 import java.util.UUID;
 
-
+/**
+ * Фасад платёжного API: делегирует транзакционные операции PaymentTxService (pay/refund)
+ * и отвечает на сверку getOrderPayments — «была ли оплата/возврат по заказу и какой paymentId».
+ * getOrderPayments использует ReconciliationJob в order-service для спасения застрявших заказов.
+ */
 @Service
 @RequiredArgsConstructor
 @Log4j2
 public class PaymentService {
 
-    private final AccountRepository accountRepository;
+    private final PaymentTxService paymentTxService;
+    private final PaymentRepository paymentRepository;
 
-    @Transactional
+    /** Сводка платежей заказа для сверки (ReconciliationJob): paid/refunded/paymentId. */
+    public OrderPaymentsResponse getOrderPayments(UUID orderUuid) {
+        Optional<Payment> payment = paymentRepository.findByOrderUuidAndType(orderUuid, PaymentType.PAYMENT);
+        boolean refunded = paymentRepository.findByOrderUuidAndType(orderUuid, PaymentType.REFUND).isPresent();
+        boolean paid = payment.map(p -> p.getStatus() == Status.SUCCESS).orElse(false);
+        UUID paymentId = payment.map(Payment::getPaymentId).orElse(null);
+        log.info("PaymentService: сводка платежей по заказу {}: paid={}, refunded={}", orderUuid, paid, refunded);
+        return new OrderPaymentsResponse(orderUuid, paid, refunded, paymentId);
+    }
+
+    /**
+     * Идемпотентная оплата: платёж по заказу уже есть -> вернуть сохранённый результат;
+     * гонка (двое прошли проверку одновременно) -> уникальный индекс в PaymentTxService
+     * приводит к DataIntegrityViolation -> возвращаем результат «победителя». Деньги
+     * списываются не более одного раза при любом числе повторов.
+     */
     public PaymentResponse paymentOrder(AccountRequest accountRequest) {
-        log.info("PaymentService: попытка списания {} с карты {}",
-                accountRequest.getTotalAmount(), accountRequest.getCardNumber());
+        log.info("PaymentService: попытка списания {} с карты {} по заказу {}",
+                accountRequest.getTotalAmount(),
+                PaymentTxService.maskCard(accountRequest.getCardNumber()),
+                accountRequest.getOrderUuid());
 
-        Account account = accountRepository.findAccountByCardNumber(accountRequest.getCardNumber())
-                .orElseThrow(() -> {
-                    log.error("PaymentService: не найден аккаунт с номером карты {}", accountRequest.getCardNumber());
-                    return new CardNumberNotFoundException();
-                });
-
-        double currentBalance = account.getAmountMoney();
-        if (currentBalance < accountRequest.getTotalAmount()) {
-            log.info("PaymentService: недостаточно средств для списания.");
-            return new PaymentResponse(null, Status.FAILED);
+        Optional<Payment> existing = paymentRepository.findByOrderUuidAndType(accountRequest.getOrderUuid(), PaymentType.PAYMENT);
+        if (existing.isPresent()) {
+            Payment payment = existing.get();
+            log.info("PaymentService: оплата заказа {} уже выполнялась — возвращаем сохранённый результат {} без повторного списания",
+                    accountRequest.getOrderUuid(), payment.getStatus());
+            return new PaymentResponse(payment.getPaymentId(), payment.getStatus());
         }
 
-        double newBalance = currentBalance - accountRequest.getTotalAmount();
-        BigDecimal bd = BigDecimal.valueOf(newBalance).setScale(2, RoundingMode.HALF_UP);
-        account.setAmountMoney(bd.doubleValue());
-        accountRepository.save(account);
-        log.info("PaymentService: списание успешно. Новый баланс: {}", bd.doubleValue());
-
-        return new PaymentResponse(UUID.randomUUID(), Status.SUCCESS);
+        try {
+            return paymentTxService.pay(accountRequest);
+        } catch (DataIntegrityViolationException e) {
+            Payment winner = paymentRepository.findByOrderUuidAndType(accountRequest.getOrderUuid(), PaymentType.PAYMENT)
+                    .orElseThrow(() -> e);
+            log.info("PaymentService: конкурентная оплата заказа {} победила — возвращаем её результат {}",
+                    accountRequest.getOrderUuid(), winner.getStatus());
+            return new PaymentResponse(winner.getPaymentId(), winner.getStatus());
+        }
     }
 
-    @Transactional
+    /** Идемпотентный возврат — схема та же, что и у paymentOrder (сохранённый результат/победитель гонки). */
     public PaymentResponse refundedOrder(AccountRequest accountRequest) {
-        log.info("PaymentService: возврат {} на карту {}", accountRequest.getTotalAmount(), accountRequest.getCardNumber());
+        log.info("PaymentService: возврат {} на карту {} по заказу {}",
+                accountRequest.getTotalAmount(),
+                PaymentTxService.maskCard(accountRequest.getCardNumber()),
+                accountRequest.getOrderUuid());
 
-        Account account = accountRepository.findAccountByCardNumber(accountRequest.getCardNumber())
-                .orElseThrow(() -> {
-                    log.error("PaymentService: не найден аккаунт для возврата с номером карты {}", accountRequest.getCardNumber());
-                    return new CardNumberNotFoundException();
-                });
+        Optional<Payment> existing = paymentRepository.findByOrderUuidAndType(accountRequest.getOrderUuid(), PaymentType.REFUND);
+        if (existing.isPresent()) {
+            Payment refund = existing.get();
+            log.info("PaymentService: возврат по заказу {} уже выполнялся — возвращаем сохранённый результат без повторного зачисления",
+                    accountRequest.getOrderUuid());
+            return new PaymentResponse(refund.getPaymentId(), refund.getStatus());
+        }
 
-        double newBalance = account.getAmountMoney() + accountRequest.getTotalAmount();
-        BigDecimal bd = BigDecimal.valueOf(newBalance).setScale(2, RoundingMode.HALF_UP);
-        account.setAmountMoney(bd.doubleValue());
-        accountRepository.save(account);
-
-        log.info("PaymentService: возврат успешно завершён. Новый баланс: {}", bd.doubleValue());
-        return new PaymentResponse(null, Status.REFUNDED);
+        try {
+            return paymentTxService.refund(accountRequest);
+        } catch (DataIntegrityViolationException e) {
+            Payment winner = paymentRepository.findByOrderUuidAndType(accountRequest.getOrderUuid(), PaymentType.REFUND)
+                    .orElseThrow(() -> e);
+            log.info("PaymentService: конкурентный возврат заказа {} победил — возвращаем его результат",
+                    accountRequest.getOrderUuid());
+            return new PaymentResponse(winner.getPaymentId(), winner.getStatus());
+        }
     }
 }
-

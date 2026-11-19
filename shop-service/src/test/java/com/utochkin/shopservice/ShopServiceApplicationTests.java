@@ -2,7 +2,7 @@ package com.utochkin.shopservice;
 
 import com.utochkin.shopservice.config.AuthServerRoleConverter;
 import com.utochkin.shopservice.config.Config;
-import com.utochkin.shopservice.dto.ProductDtoRequest;
+import com.utochkin.shopservice.web.ProductDtoRequest;
 import com.utochkin.shopservice.exceptions.CustomAccessDeniedHandler;
 import com.utochkin.shopservice.models.Product;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,10 +25,14 @@ import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.TestPropertySource;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -47,7 +51,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 @ActiveProfiles("test")
 @TestPropertySource(properties = {
-        "spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1",
         "spring.cloud.compatibility-verifier.enabled=false",
         "spring.liquibase.enabled=false",
         "eureka.client.enabled=false",
@@ -57,7 +60,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @WithMockUser(roles = "ADMIN")
 @AutoConfigureMockMvc
+@Testcontainers(disabledWithoutDocker = true)
 class ShopServiceApplicationTests {
+
+    // Реальный PostgreSQL в docker-контейнере: @ServiceConnection подставляет реквизиты
+    // dataSource в тестовый контекст (вместо встроенной H2; схема создаётся Hibernate)
+    @Container
+    @ServiceConnection
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine");
 
     @Autowired
     private MockMvc mvc;
@@ -90,7 +100,7 @@ class ShopServiceApplicationTests {
         p.setArticleId(UUID.randomUUID());
         p.setName("Phone");
         p.setQuantity(10);
-        p.setPrice(499.99);
+        p.setPrice(BigDecimal.valueOf(499.99));
         existingId = p.getArticleId();
         productRepository.save(p);
     }
@@ -126,7 +136,7 @@ class ShopServiceApplicationTests {
     @Test
     @DisplayName("POST /shop/api/v1/addProduct — создает продукт и возвращает dto с 201")
     void addProduct_creates() throws Exception {
-        ProductDtoRequest req = new ProductDtoRequest("Laptop", 5, 1299.0);
+        ProductDtoRequest req = new ProductDtoRequest("Laptop", 5, BigDecimal.valueOf(1299.0));
         String json = mapper.writeValueAsString(req);
 
         mvc.perform(post("/shop/api/v1/addProduct")
@@ -162,7 +172,7 @@ class ShopServiceApplicationTests {
     @Test
     @DisplayName("PUT /shop/api/v1/updateProduct/{id} — обновляет и возвращает dto")
     void updateProduct_updates() throws Exception {
-        ProductDtoRequest req = new ProductDtoRequest("PhoneX", 20, 599.0);
+        ProductDtoRequest req = new ProductDtoRequest("PhoneX", 20, BigDecimal.valueOf(599.0));
         String json = mapper.writeValueAsString(req);
 
         mvc.perform(put("/shop/api/v1/updateProduct/{id}", existingId)
@@ -180,7 +190,7 @@ class ShopServiceApplicationTests {
     @Test
     @DisplayName("PUT /shop/api/v1/updateProduct/{id} — 404 если отсутствует")
     void updateProduct_notFound() throws Exception {
-        ProductDtoRequest req = new ProductDtoRequest("X",1,10.0);
+        ProductDtoRequest req = new ProductDtoRequest("X", 1, BigDecimal.valueOf(10.0));
         mvc.perform(put("/shop/api/v1/updateProduct/{id}", UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))

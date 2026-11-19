@@ -5,8 +5,10 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.*;
+import org.hibernate.annotations.Check;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @NoArgsConstructor
@@ -15,6 +17,7 @@ import java.util.UUID;
 @Getter
 @Entity
 @Builder
+@Check(constraints = "quantity >= 0")
 @Table(name = "products")
 public class Product implements Serializable {
 
@@ -23,7 +26,7 @@ public class Product implements Serializable {
     private Long id;
 
     @Column(name = "article_id", nullable = false, columnDefinition = "UUID")
-    @NotEmpty
+    @NotNull
     private UUID articleId;
 
     @Column(name = "name")
@@ -31,11 +34,12 @@ public class Product implements Serializable {
     private String name;
 
     @Column(name = "quantity")
+    @NotNull
     @Positive
     private Integer quantity;
 
-    @Column(name = "price")
+    @Column(name = "price", precision = 19, scale = 2)
     @NotNull
     @Positive
-    private Double price;
+    private BigDecimal price;
 }

@@ -2,12 +2,13 @@ package com.utochkin.orderservice.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.utochkin.orderservice.models.Status;
-import com.utochkin.orderservice.request.OrderRequest;
+import com.utochkin.orderservice.web.OrderRequest;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -19,8 +20,8 @@ public class OrderDtoForKafka implements Serializable {
     @Schema(description = "UUID заказа", example = "3f9edc4b-e4cf-4257-a485-72a147a0b45f", type = "string", format = "uuid")
     private final UUID orderUuid;
 
-    @Schema(description = "Общая стоимость заказа", example = "1000.0", type = "number", format = "double")
-    private final Double totalAmount;
+    @Schema(description = "Общая стоимость заказа", example = "1000.00", type = "number")
+    private final BigDecimal totalAmount;
 
     @Schema(description = "Статус заказа", example = "SUCCESS", allowableValues = {"WAITING_FOR_PAYMENT", "SUCCESS", "FAILED", "REFUNDED"})
     private final Status orderStatus;
@@ -44,4 +45,7 @@ public class OrderDtoForKafka implements Serializable {
 
     @Schema(description = "UUID оплаты заказа", example = "3f9edc4b-e4cf-4257-a485-72a147a01245f", type = "string", format = "uuid")
     private UUID paymentId;
+
+    @Schema(description = "Уникальный идентификатор события для дедупликации у консьюмеров", type = "string", format = "uuid")
+    private UUID eventId;
 }

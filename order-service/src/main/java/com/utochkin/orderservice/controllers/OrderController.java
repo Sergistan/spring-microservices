@@ -2,11 +2,11 @@ package com.utochkin.orderservice.controllers;
 
 import com.utochkin.orderservice.dto.OrderDto;
 import com.utochkin.orderservice.dto.OrderDtoForKafka;
-import com.utochkin.orderservice.models.ErrorResponse;
+import com.utochkin.orderservice.dto.ErrorResponse;
 import com.utochkin.orderservice.models.User;
-import com.utochkin.orderservice.request.CompositeRequest;
-import com.utochkin.orderservice.request.PaymentRequest;
-import com.utochkin.orderservice.request.PaymentResponse;
+import com.utochkin.orderservice.web.CompositeRequest;
+import com.utochkin.orderservice.web.PaymentRequest;
+import com.utochkin.orderservice.feign.PaymentResponse;
 import com.utochkin.orderservice.services.OrderService;
 import com.utochkin.orderservice.services.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,7 +26,14 @@ import org.springframework.web.bind.annotation.*;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 
+/**
+ * Входная точка REST API заказов (приходят через getaway-server, 8072 -> 8180).
+ * Помимо JWT проверку получает заголовки X-User-* (инжектирует JwtTokenFilter гейтвея):
+ * create использует их для создания локального пользователя, pay/refunded — для проверки
+ * владельца заказа (чужому 403). Ответы: 201 + OrderDto при создании, PaymentResponse при оплате.
+ */
 @RestController
 @RequestMapping("/order/api/v1")
 @RequiredArgsConstructor
@@ -36,6 +43,11 @@ public class OrderController {
     private final UserService userService;
     private final OrderService orderService;
 
+    /**
+     * POST /create: создание заказа. Порядок: URL-decode ФИО из заголовков -> найти/создать
+     * локального пользователя по subId+username -> checkOrder (наличие товаров в shop) ->
+     * createOrder (STOCK_PENDING -> списание -> WAITING_FOR_PAYMENT). 201 + OrderDto.
+     */
     @PostMapping("/create")
     @Operation(summary = "Создание заказа")
     @ApiResponses(value = {
@@ -57,10 +69,12 @@ public class OrderController {
                                                  description = "Ввод списка товаров для покупки и адреса доставки заказа", required = true) @Valid CompositeRequest compositeRequest
     ) {
 
+        // Заголовки X-User-* приходит URL-encoded (кириллица ФИО) — декодируем
         firstName = URLDecoder.decode(firstName, StandardCharsets.UTF_8);
         lastName = URLDecoder.decode(lastName, StandardCharsets.UTF_8);
         User user;
 
+        // Первый заказ пользователя -> создаём локальную запись из заголовков
         if (!userService.isUserExistsByUsername(subId, username)) {
             user = userService.createUser(subId, username, firstName, lastName, email, role);
         } else {
@@ -70,11 +84,12 @@ public class OrderController {
         if (!orderService.checkOrder(compositeRequest.getOrderRequests())) {
             return new ResponseEntity<>("У нас нет товара в таком количестве или вы неправильно задали артикул товара", HttpStatus.BAD_REQUEST);
         } else {
-            OrderDto orderDto = orderService.createOrder(user, compositeRequest.getOrderRequests(), compositeRequest.getAddressDto());
+            OrderDto orderDto = orderService.createOrder(user, UUID.randomUUID(), compositeRequest.getOrderRequests(), compositeRequest.getAddressDto());
             return new ResponseEntity<>(orderDto, HttpStatus.CREATED);
         }
     }
 
+    /** POST /pay: оплата заказа владельцем (subId из X-User-SubId; чужим 403, повторная оплата 400). */
     @PostMapping("/pay")
     @Operation(summary = "Оплата заказа")
     @ApiResponses(value = {
@@ -84,12 +99,14 @@ public class OrderController {
             @ApiResponse(responseCode = "404", description = "Не найдено", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "500", description = "Ошибка сервера", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
     })
-    public ResponseEntity<?> paymentOrder(@RequestBody @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(schema = @Schema(implementation = PaymentRequest.class),
+    public ResponseEntity<?> paymentOrder(@Parameter(hidden = true) @RequestHeader("X-User-SubId") String subId,
+                                          @RequestBody @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(schema = @Schema(implementation = PaymentRequest.class),
             encoding = @Encoding(contentType = "application/json")),
             description = "Ввод uuid заказа и номера карты для оплаты заказа", required = true) @Valid PaymentRequest paymentRequest) {
-        return new ResponseEntity<>(orderService.paymentOrder(paymentRequest), HttpStatus.OK);
+        return new ResponseEntity<>(orderService.paymentOrder(paymentRequest, subId), HttpStatus.OK);
     }
 
+    /** POST /refunded: отмена оплаченного заказа (только владелец; возврат средств и остатков). */
     @PostMapping("/refunded")
     @Operation(summary = "Отмена заказа")
     @ApiResponses(value = {
@@ -100,10 +117,11 @@ public class OrderController {
             @ApiResponse(responseCode = "404", description = "Не найдено", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "500", description = "Ошибка сервера", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
     })
-    public ResponseEntity<?> refundedOrder(@RequestBody @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(schema = @Schema(implementation = PaymentRequest.class),
+    public ResponseEntity<?> refundedOrder(@Parameter(hidden = true) @RequestHeader("X-User-SubId") String subId,
+                                           @RequestBody @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(schema = @Schema(implementation = PaymentRequest.class),
             encoding = @Encoding(contentType = "application/json")),
             description = "Ввод uuid заказа и номера карты для отмены заказа", required = true) @Valid PaymentRequest paymentRequest) {
-        orderService.refundedOrder(paymentRequest);
+        orderService.refundedOrder(paymentRequest, subId);
         return new ResponseEntity<>("Заказ успешно отменен", HttpStatus.OK);
     }
 

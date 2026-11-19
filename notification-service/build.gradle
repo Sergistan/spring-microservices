@@ -1,6 +1,6 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.4.3'
+    id 'org.springframework.boot' version '3.4.4'
     id 'io.spring.dependency-management' version '1.1.7'
 }
 
@@ -24,32 +24,35 @@ repositories {
 }
 
 ext {
-    set('springCloudVersion', "2024.0.0")
+    set('springCloudVersion', "2024.0.1")
 }
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-mail'
-    implementation group: 'org.springframework.boot', name: 'spring-boot-starter-security', version: '3.3.5'
-    implementation group: 'org.springframework.boot', name: 'spring-boot-starter-oauth2-client', version: '3.3.5'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
     implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.cloud:spring-cloud-starter-config'
     implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
     implementation 'org.springframework.kafka:spring-kafka'
+    implementation 'io.micrometer:micrometer-registry-prometheus'
+    implementation 'io.micrometer:micrometer-tracing'
+    implementation 'io.micrometer:micrometer-tracing-bridge-brave'
+    implementation 'io.zipkin.reporter2:zipkin-reporter-brave'
+    implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testImplementation 'org.springframework.kafka:spring-kafka-test'
+    testImplementation platform('org.testcontainers:testcontainers-bom:1.20.4')
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:kafka'
     testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    implementation("jakarta.validation:jakarta.validation-api:3.0.2")
-    implementation("org.springframework.cloud:spring-cloud-starter-zipkin:2.2.8.RELEASE")
-    implementation("org.springframework.boot:spring-boot-starter-actuator:3.4.2")
-    implementation("io.micrometer:micrometer-registry-prometheus:1.14.5")
-    implementation("net.logstash.logback:logstash-logback-encoder:8.0")
-    implementation("io.micrometer:micrometer-tracing:1.4.3")
-    implementation("io.micrometer:micrometer-tracing-bridge-brave:1.4.3")
-    implementation("org.springframework.cloud:spring-cloud-starter-sleuth:3.1.8")
 }
 
 dependencyManagement {
