@@ -62,7 +62,7 @@ class FeignUserTokenRelayInterceptorTest {
         when(serviceTokenClient.getServiceToken()).thenThrow(new IllegalStateException("нет регистрации"));
 
         RequestTemplate template = new RequestTemplate();
-        template.uri("/payment/api/v1/{uuid}");
+        template.uri("/payment/api/v1/payments/{uuid}");
         interceptor.apply(template);
 
         assertThat(template.headers()).doesNotContainKey("Authorization");

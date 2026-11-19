@@ -55,14 +55,14 @@ public class PaymentControllerTest {
     private ObjectMapper mapper;
 
     @Test
-    @DisplayName("POST /payment/api/v1/pay — 200, SUCCESS")
+    @DisplayName("POST /payment/api/v1/payments — 200, SUCCESS")
     void paymentOrder_Success() throws Exception {
         AccountRequest req = new AccountRequest(UUID.randomUUID(), BigDecimal.valueOf(100.0), "1111 2222 3333 4444");
         PaymentResponse resp = new PaymentResponse(UUID.randomUUID(), Status.SUCCESS);
 
         given(paymentService.paymentOrder(any(AccountRequest.class))).willReturn(resp);
 
-        mvc.perform(post("/payment/api/v1/pay")
+        mvc.perform(post("/payment/api/v1/payments")
                         .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))
@@ -72,14 +72,14 @@ public class PaymentControllerTest {
     }
 
     @Test
-    @DisplayName("POST /payment/api/v1/pay — 404, CardNumberNotFoundException")
+    @DisplayName("POST /payment/api/v1/payments — 404, CardNumberNotFoundException")
     void paymentOrder_CardNotFound_NotFound() throws Exception {
         AccountRequest req = new AccountRequest(UUID.randomUUID(), BigDecimal.valueOf(50.0), "9999 8888 7777 6666");
 
         given(paymentService.paymentOrder(any(AccountRequest.class)))
                 .willThrow(new CardNumberNotFoundException());
 
-        mvc.perform(post("/payment/api/v1/pay")
+        mvc.perform(post("/payment/api/v1/payments")
                         .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))
@@ -88,14 +88,14 @@ public class PaymentControllerTest {
     }
 
     @Test
-    @DisplayName("POST /payment/api/v1/refunded — 200, REFUNDED")
+    @DisplayName("POST /payment/api/v1/refunds — 200, REFUNDED")
     void refundedOrder_Success() throws Exception {
         AccountRequest req = new AccountRequest(UUID.randomUUID(), BigDecimal.valueOf(75.0), "1111 2222 3333 4444");
         PaymentResponse resp = new PaymentResponse(UUID.randomUUID(), Status.REFUNDED);
 
         given(paymentService.refundedOrder(any(AccountRequest.class))).willReturn(resp);
 
-        mvc.perform(post("/payment/api/v1/refunded")
+        mvc.perform(post("/payment/api/v1/refunds")
                         .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))
@@ -104,14 +104,14 @@ public class PaymentControllerTest {
     }
 
     @Test
-    @DisplayName("POST /payment/api/v1/refunded — 404, CardNumberNotFoundException")
+    @DisplayName("POST /payment/api/v1/refunds — 404, CardNumberNotFoundException")
     void refundedOrder_CardNotFound() throws Exception {
         AccountRequest req = new AccountRequest(UUID.randomUUID(), BigDecimal.valueOf(20.0), "0000 1111 2222 3333");
 
         given(paymentService.refundedOrder(any(AccountRequest.class)))
                 .willThrow(new CardNumberNotFoundException());
 
-        mvc.perform(post("/payment/api/v1/refunded")
+        mvc.perform(post("/payment/api/v1/refunds")
                         .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))

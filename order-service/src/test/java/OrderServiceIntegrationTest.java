@@ -122,7 +122,7 @@ class OrderServiceIntegrationTest {
         CompositeRequest cr = new CompositeRequest(req, new AddressDto("City", "Street", 10, 101));
         String json = objectMapper.writeValueAsString(cr);
 
-        String resp = mvc.perform(post("/order/api/v1/create")
+        String resp = mvc.perform(post("/order/api/v1/orders")
                         .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-User-SubId", "sub")
@@ -145,7 +145,7 @@ class OrderServiceIntegrationTest {
                 List.of(new OrderRequest(UUID.randomUUID(), 1)),
                 new AddressDto("City", "Street", 1, 1));
 
-        mvc.perform(post("/order/api/v1/create")
+        mvc.perform(post("/order/api/v1/orders")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(cr)))
                 .andExpect(status().isUnauthorized());
@@ -167,7 +167,7 @@ class OrderServiceIntegrationTest {
         );
         String body = objectMapper.writeValueAsString(payload);
 
-        mvc.perform(post("/order/api/v1/create")
+        mvc.perform(post("/order/api/v1/orders")
                         .with(jwt())
                         .contentType("application/json")
                         .header("X-User-SubId", "sub")
@@ -222,7 +222,7 @@ class OrderServiceIntegrationTest {
                 .willReturn(new PaymentResponse(payId, Status.SUCCESS));
 
         String payJson = objectMapper.writeValueAsString(payReq);
-        mvc.perform(post("/order/api/v1/pay")
+        mvc.perform(post("/order/api/v1/orders/{uuid}/payments", orderUuid)
                         .with(jwt())
                         .header("X-User-SubId", "sub")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -256,7 +256,7 @@ class OrderServiceIntegrationTest {
         given(paymentController.paymentOrder(acct))
                 .willReturn(new PaymentResponse(UUID.randomUUID(), Status.SUCCESS));
 
-        mvc.perform(post("/order/api/v1/pay")
+        mvc.perform(post("/order/api/v1/orders/{uuid}/payments", orderUuid)
                         .with(jwt())
                         .header("X-User-SubId", "sub")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -264,7 +264,7 @@ class OrderServiceIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SUCCESS"));
 
-        mvc.perform(post("/order/api/v1/pay")
+        mvc.perform(post("/order/api/v1/orders/{uuid}/payments", orderUuid)
                         .with(jwt())
                         .header("X-User-SubId", "sub")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -306,7 +306,7 @@ class OrderServiceIntegrationTest {
 
         CompositeRequest cr = new CompositeRequest(reqs, new AddressDto("City", "Street", 10, 101));
 
-        mvc.perform(post("/order/api/v1/create")
+        mvc.perform(post("/order/api/v1/orders")
                         .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-User-SubId", "sub")
@@ -326,7 +326,7 @@ class OrderServiceIntegrationTest {
     void createOrder_emptyRequests_rejected() throws Exception {
         CompositeRequest cr = new CompositeRequest(List.of(), new AddressDto("City", "Street", 10, 101));
 
-        mvc.perform(post("/order/api/v1/create")
+        mvc.perform(post("/order/api/v1/orders")
                         .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-User-SubId", "sub")
@@ -353,7 +353,7 @@ class OrderServiceIntegrationTest {
         given(paymentController.paymentOrder(acctPay))
                 .willReturn(new PaymentResponse(payId, Status.SUCCESS));
 
-        mvc.perform(post("/order/api/v1/pay")
+        mvc.perform(post("/order/api/v1/orders/{uuid}/payments", orderUuid)
                         .with(jwt())
                         .header("X-User-SubId", "sub")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -367,7 +367,7 @@ class OrderServiceIntegrationTest {
         given(paymentController.refundedOrder(acctRefund))
                 .willReturn(new PaymentResponse(refundId, Status.REFUNDED));
 
-        mvc.perform(post("/order/api/v1/refunded")
+        mvc.perform(post("/order/api/v1/orders/{uuid}/refunds", orderUuid)
                         .with(jwt())
                         .header("X-User-SubId", "sub")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -392,7 +392,7 @@ class OrderServiceIntegrationTest {
 
         PaymentRequest payReq = new PaymentRequest(orderUuid, "1111 2222 3333 4444");
 
-        mvc.perform(post("/order/api/v1/pay")
+        mvc.perform(post("/order/api/v1/orders/{uuid}/payments", orderUuid)
                         .with(jwt())
                         .header("X-User-SubId", "someone-else")
                         .contentType(MediaType.APPLICATION_JSON)

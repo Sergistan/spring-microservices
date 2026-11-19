@@ -28,9 +28,10 @@ import java.util.UUID;
 
 /**
  * REST API каталога shop-service. Два рода потребителей:
- *  - человек/фронтенд через getaway-server: getAllProducts, CRUD товара (роль ADMIN);
- *  - order-service напрямую через Eureka (Feign): checkOrder, getSumTotalPriceOrder,
- *    changeTotalQuantityProductsAfter{Create,Refunded}Order — атомарное списание/возврат остатков.
+ *  - человек/фронтенд через getaway-server: GET /products, CRUD товара (роль ADMIN);
+ *  - order-service напрямую через Eureka (Feign): POST /stock-verifications,
+ *    /price-calculations, /stock-deductions, /stock-restorations — проверка и
+ *    атомарное идемпотентное списание/возврат остатков.
  */
 @RestController
 @RequestMapping("/shop/api/v1")
@@ -40,36 +41,36 @@ public class ShopController {
 
     private final ProductService productService;
 
-    /** Внутренний эндпоинт для order-service (Feign, @Hidden из swagger): наличие товаров. */
-    @PostMapping("/checkOrder")
+    /** Внутренний эндпоинт для order-service (Feign, @Hidden из swagger): проверка наличия товаров. */
+    @PostMapping("/stock-verifications")
     @Hidden
     Boolean checkOrder(@RequestBody List<OrderRequest> orderRequests) {
         return productService.checkOrder(orderRequests);
     }
 
-    /** Внутренний (Feign, @Hidden): сумма заказа по позициям. */
-    @PostMapping("/getSumTotalPriceOrder")
+    /** Внутренний (Feign, @Hidden): расчёт суммы заказа по позициям. */
+    @PostMapping("/price-calculations")
     @Hidden
     BigDecimal getSumTotalPriceOrder(@RequestBody List<OrderRequest> orderRequests) {
         return productService.getSumTotalPriceOrder(orderRequests);
     }
 
     /** Внутренний (Feign, @Hidden): идемпотентное списание остатков после создания заказа. */
-    @PostMapping("/changeTotalQuantityProductsAfterCreateOrder")
+    @PostMapping("/stock-deductions")
     @Hidden
     void changeTotalQuantityProductsAfterCreateOrder(@RequestBody @Valid StockChangeRequest stockChangeRequest) {
         productService.changeTotalQuantityProductsAfterCreateOrder(stockChangeRequest.getOrderUuid(), stockChangeRequest.getOrderRequests());
     }
 
     /** Внутренний (Feign, @Hidden): идемпотентный возврат остатков после отмены заказа. */
-    @PostMapping("/changeTotalQuantityProductsAfterRefundedOrder")
+    @PostMapping("/stock-restorations")
     @Hidden
     void changeTotalQuantityProductsAfterRefundedOrder(@RequestBody @Valid StockChangeRequest stockChangeRequest) {
         productService.changeTotalQuantityProductsAfterRefundedOrder(stockChangeRequest.getOrderUuid(), stockChangeRequest.getOrderRequests());
     }
 
-    /** GET: каталог постранично (page/size/sort -> Pageable; ответ из Redis-кэша). */
-    @GetMapping("/getAllProducts")
+    /** GET /products: каталог постранично (page/size/sort -> Pageable; ответ из Redis-кэша). */
+    @GetMapping("/products")
     @Operation(summary = "Получение всех товаров в магазине")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Товар успешно получен", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = ProductDto.class)))),
@@ -91,8 +92,8 @@ public class ShopController {
         return ResponseEntity.ok(productService.getAllProducts(pageable));
     }
 
-    /** GET: карточка товара по articleId (кэш; 404 если нет). */
-    @GetMapping("/getProducts/{articleId}")
+    /** GET /products/{articleId}: карточка товара (кэш; 404 если нет). */
+    @GetMapping("/products/{articleId}")
     @Operation(summary = "Получение товара по номеру артикула")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Товар успешно получен", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDto.class))),
@@ -106,8 +107,8 @@ public class ShopController {
         return ResponseEntity.ok(productService.getProduct(articleId));
     }
 
-    /** POST: создание товара (только ADMIN — см. Config). */
-    @PostMapping("/addProduct")
+    /** POST /products: создание товара (только ADMIN — см. Config). */
+    @PostMapping("/products")
     @Operation(summary = "Добавление товара в магазин")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Товар успешно добавлен", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDto.class))),
@@ -121,8 +122,8 @@ public class ShopController {
         return new ResponseEntity<>(productService.addProduct(productDtoRequest), HttpStatus.CREATED);
     }
 
-    /** DELETE: удаление товара (только ADMIN). */
-    @DeleteMapping("/deleteProduct/{articleId}")
+    /** DELETE /products/{articleId}: удаление товара (только ADMIN). */
+    @DeleteMapping("/products/{articleId}")
     @Operation(summary = "Удаление товара из магазина")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Товар успешно удален", content = @Content(schema = @Schema(implementation = String.class),
@@ -138,8 +139,8 @@ public class ShopController {
         return new ResponseEntity<>(String.format("Товар с articleId = %s успешно удален", articleId), HttpStatus.OK);
     }
 
-    /** PUT: обновление карточки товара (только ADMIN). */
-    @PutMapping("/updateProduct/{articleId}")
+    /** PUT /products/{articleId}: обновление карточки товара (только ADMIN). */
+    @PutMapping("/products/{articleId}")
     @Operation(summary = "Обновление товара в магазине")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Товар успешно обновлен", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDto.class))),

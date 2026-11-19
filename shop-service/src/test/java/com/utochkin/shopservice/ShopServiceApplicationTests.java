@@ -108,7 +108,7 @@ class ShopServiceApplicationTests {
     @Test
     @DisplayName("GET /shop/api/v1/getAllProducts — возвращает выгруженные продукты")
     void getAllProducts_returnsProducts() throws Exception {
-        mvc.perform(get("/shop/api/v1/getAllProducts")
+        mvc.perform(get("/shop/api/v1/products")
                         .param("page", "0")
                         .param("size", "5")
                         .param("sort", "name,asc"))
@@ -120,7 +120,7 @@ class ShopServiceApplicationTests {
     @Test
     @DisplayName("GET /shop/api/v1/getProducts/{id} — возвращает один продукт")
     void getProduct_returnsDto() throws Exception {
-        mvc.perform(get("/shop/api/v1/getProducts/{id}", existingId))
+        mvc.perform(get("/shop/api/v1/products/{id}", existingId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.articleId").value(existingId.toString()))
                 .andExpect(jsonPath("$.name").value("Phone"));
@@ -129,7 +129,7 @@ class ShopServiceApplicationTests {
     @Test
     @DisplayName("GET /shop/api/v1/getProducts/{id} — возвращает 404 при отсутствии")
     void getProduct_notFound() throws Exception {
-        mvc.perform(get("/shop/api/v1/getProducts/{id}", UUID.randomUUID()))
+        mvc.perform(get("/shop/api/v1/products/{id}", UUID.randomUUID()))
                 .andExpect(status().isNotFound());
     }
 
@@ -139,7 +139,7 @@ class ShopServiceApplicationTests {
         ProductDtoRequest req = new ProductDtoRequest("Laptop", 5, BigDecimal.valueOf(1299.0));
         String json = mapper.writeValueAsString(req);
 
-        mvc.perform(post("/shop/api/v1/addProduct")
+        mvc.perform(post("/shop/api/v1/products")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json))
                 .andExpect(status().isCreated())
@@ -155,7 +155,7 @@ class ShopServiceApplicationTests {
     @Test
     @DisplayName("DELETE /shop/api/v1/deleteProduct/{id} — удаляет продукт и возвращает 200")
     void deleteProduct_removes() throws Exception {
-        mvc.perform(delete("/shop/api/v1/deleteProduct/{id}", existingId))
+        mvc.perform(delete("/shop/api/v1/products/{id}", existingId))
                 .andExpect(status().isOk())
                 .andExpect(content().string("Товар с articleId = " + existingId + " успешно удален"));
 
@@ -165,7 +165,7 @@ class ShopServiceApplicationTests {
     @Test
     @DisplayName("DELETE /shop/api/v1/deleteProduct/{id} — 404 если отсутствует")
     void deleteProduct_notFound() throws Exception {
-        mvc.perform(delete("/shop/api/v1/deleteProduct/{id}", UUID.randomUUID()))
+        mvc.perform(delete("/shop/api/v1/products/{id}", UUID.randomUUID()))
                 .andExpect(status().isNotFound());
     }
 
@@ -175,7 +175,7 @@ class ShopServiceApplicationTests {
         ProductDtoRequest req = new ProductDtoRequest("PhoneX", 20, BigDecimal.valueOf(599.0));
         String json = mapper.writeValueAsString(req);
 
-        mvc.perform(put("/shop/api/v1/updateProduct/{id}", existingId)
+        mvc.perform(put("/shop/api/v1/products/{id}", existingId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json))
                 .andExpect(status().isOk())
@@ -191,7 +191,7 @@ class ShopServiceApplicationTests {
     @DisplayName("PUT /shop/api/v1/updateProduct/{id} — 404 если отсутствует")
     void updateProduct_notFound() throws Exception {
         ProductDtoRequest req = new ProductDtoRequest("X", 1, BigDecimal.valueOf(10.0));
-        mvc.perform(put("/shop/api/v1/updateProduct/{id}", UUID.randomUUID())
+        mvc.perform(put("/shop/api/v1/products/{id}", UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))
                 .andExpect(status().isNotFound());

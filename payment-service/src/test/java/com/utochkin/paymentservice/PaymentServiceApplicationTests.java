@@ -100,7 +100,7 @@ class PaymentServiceApplicationTests {
     @DisplayName("POST /payment/api/v1/pay — SUCCESS когда достаточно средств")
     void pay_success() throws Exception {
         var req = new AccountRequest(UUID.randomUUID(), BigDecimal.valueOf(200.0), EXISTING_CARD);
-        mvc.perform(post("/payment/api/v1/pay")
+        mvc.perform(post("/payment/api/v1/payments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -117,13 +117,13 @@ class PaymentServiceApplicationTests {
         UUID orderUuid = UUID.randomUUID();
         var req = new AccountRequest(orderUuid, BigDecimal.valueOf(200.0), EXISTING_CARD);
 
-        mvc.perform(post("/payment/api/v1/pay")
+        mvc.perform(post("/payment/api/v1/payments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SUCCESS"));
 
-        mvc.perform(post("/payment/api/v1/pay")
+        mvc.perform(post("/payment/api/v1/payments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -137,7 +137,7 @@ class PaymentServiceApplicationTests {
     @DisplayName("POST /payment/api/v1/pay — FAILED при недостаточности средств")
     void pay_insufficient() throws Exception {
         var req = new AccountRequest(UUID.randomUUID(), BigDecimal.valueOf(600.0), EXISTING_CARD);
-        mvc.perform(post("/payment/api/v1/pay")
+        mvc.perform(post("/payment/api/v1/payments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -152,7 +152,7 @@ class PaymentServiceApplicationTests {
     @DisplayName("POST /payment/api/v1/pay — 404 когда карта не найдена")
     void pay_cardNotFound() throws Exception {
         var req = new AccountRequest(UUID.randomUUID(), BigDecimal.valueOf(100.0), MISSING_CARD);
-        mvc.perform(post("/payment/api/v1/pay")
+        mvc.perform(post("/payment/api/v1/payments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))
                 .andExpect(status().isNotFound())
@@ -164,14 +164,14 @@ class PaymentServiceApplicationTests {
     void refunded_success() throws Exception {
         UUID orderUuid = UUID.randomUUID();
         var payReq = new AccountRequest(orderUuid, BigDecimal.valueOf(150.0), EXISTING_CARD);
-        mvc.perform(post("/payment/api/v1/pay")
+        mvc.perform(post("/payment/api/v1/payments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(payReq)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SUCCESS"));
 
         var req = new AccountRequest(orderUuid, BigDecimal.valueOf(150.0), EXISTING_CARD);
-        mvc.perform(post("/payment/api/v1/refunded")
+        mvc.perform(post("/payment/api/v1/refunds")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -185,7 +185,7 @@ class PaymentServiceApplicationTests {
     @DisplayName("POST /payment/api/v1/refunded — 400 когда не найден платёж по заказу")
     void refunded_noPayment() throws Exception {
         var req = new AccountRequest(UUID.randomUUID(), BigDecimal.valueOf(50.0), EXISTING_CARD);
-        mvc.perform(post("/payment/api/v1/refunded")
+        mvc.perform(post("/payment/api/v1/refunds")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest())

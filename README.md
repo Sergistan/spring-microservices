@@ -17,7 +17,7 @@ flowchart TB
     GW --> SHOP["Shop-service :8181<br/>товары, остатки,<br/>кэширование"]
     GW --> PAY["Payment-service :8182<br/>платежи, идемпотентность"]
 
-    ORD -->|"Feign: checkOrder, цена,<br/>списание и восстановление остатков"| SHOP
+    ORD -->|"Feign: проверка остатков, цена,<br/>списание и восстановление остатков"| SHOP
     ORD -->|"Feign: pay, refund, сверка<br/>JWT relay или сервисный токен"| PAY
 
     ORD --> PG1[("PostgreSQL<br/>orders, users,<br/>outbox_events")]
@@ -153,7 +153,7 @@ flowchart TB
 ## Основной алгоритм работы проекта:
 
 ### Создание заказа:
-Клиент создает заказ для покупки товара по /order/api/v1/create и отправляет запрос:
+Клиент создает заказ для покупки товара по /order/api/v1/orders и отправляет запрос:
 
 <details>
 <summary>CompositeRequest</summary>
@@ -266,7 +266,7 @@ flowchart TB
 маркером в таблице stock_operations, поэтому повторная доставка команды (после сбоя сети или ретрая) не спишет товар дважды.
 
 ### Оплата заказа:
-Оплата заказа осуществляется по /order/api/v1/pay и отправляется запрос через FeignClient на PaymentService:
+Оплата заказа осуществляется по /order/api/v1/orders/{orderUuid}/payments и отправляется запрос через FeignClient на PaymentService:
 
 <details>
 <summary>PaymentRequest</summary>
@@ -375,7 +375,7 @@ flowchart TB
 
 ### Отмена заказа:
 Заказ можно отменить лишь при условии, что он был до этого успешно оплачен. Отменить заказ может только его владелец — 
-при попытке отмены чужого заказа (по известному orderUuid) возвращается 403. Отмена заказа осуществляется по /order/api/v1/refunded и отправляется запрос через FeignClient на PaymentService:
+при попытке отмены чужого заказа (по известному orderUuid) возвращается 403. Отмена заказа осуществляется по /order/api/v1/orders/{orderUuid}/refunds и отправляется запрос через FeignClient на PaymentService:
 
 <details>
 <summary>PaymentRequest</summary>
@@ -452,15 +452,15 @@ sequenceDiagram
     participant N as Notification-service
     participant H as History-service
 
-    C->>GW: POST /order/api/v1/create + JWT
+    C->>GW: POST /order/api/v1/orders + JWT
     GW->>GW: Проверка подписи JWT, rate limit, перезапись X-User-*
     GW->>O: Запрос + доверенные заголовки X-User-*
-    O->>S: checkOrder - есть ли товар и остатки
+    O->>S: проверка остатков (stock-verifications)
     S-->>O: true
     O->>S: Списание остатков - идемпотентно, по маркеру
     O-->>C: 201 OrderDto в статусе WAITING_FOR_PAYMENT
 
-    C->>GW: POST /order/api/v1/pay - orderUuid и карта
+    C->>GW: POST /order/api/v1/orders/{uuid}/payments - карта
     GW->>O: Запрос + X-User-* (владелец проверяется)
     O->>O: CAS захват - WAITING_FOR_PAYMENT -> PROCESSING
     O->>P: pay - сумма и карта
@@ -476,7 +476,7 @@ sequenceDiagram
 
 ### 2. Товара нет или не хватает остатка
 
-Проверка checkOrder возвращает false — заказ не создаётся вовсе, клиент сразу получает понятную ошибку. Событие в Kafka не отправляется: финального исхода заказа ещё нет.
+Проверка остатков (checkOrder) возвращает false — заказ не создаётся вовсе, клиент сразу получает понятную ошибку. Событие в Kafka не отправляется: финального исхода заказа ещё нет.
 
 ```mermaid
 sequenceDiagram
@@ -486,9 +486,9 @@ sequenceDiagram
     participant O as Order-service
     participant S as Shop-service
 
-    C->>GW: POST /order/api/v1/create
+    C->>GW: POST /order/api/v1/orders
     GW->>O: Запрос + X-User-*
-    O->>S: checkOrder по списку articleId
+    O->>S: проверка остатков по списку articleId
     S-->>O: false - товара нет или остатка недостаточно
     Note over O: Заказ не создаётся, событие в Kafka не отправляется
     O-->>C: 400 - Товар отсутствует в магазине или его количество недостаточно
@@ -507,7 +507,7 @@ sequenceDiagram
     participant S as Shop-service
     participant K as Kafka
 
-    C->>O: POST /order/api/v1/pay
+    C->>O: POST /order/api/v1/orders/{uuid}/payments
     O->>O: CAS захват - WAITING_FOR_PAYMENT -> PROCESSING
     O->>P: pay
     P-->>O: 402 - на карте недостаточно средств
@@ -530,7 +530,7 @@ sequenceDiagram
     participant S as Shop-service
     participant K as Kafka
 
-    C->>O: POST /order/api/v1/refunded
+    C->>O: POST /order/api/v1/orders/{uuid}/refunds
     O->>O: Проверки - владелец по X-User-SubId и статус SUCCESS
     alt Проверки пройдены
         O->>O: CAS захват - SUCCESS -> PROCESSING

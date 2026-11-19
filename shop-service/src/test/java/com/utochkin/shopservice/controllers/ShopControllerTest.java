@@ -67,7 +67,7 @@ class ShopControllerTest {
         var dto = new ProductDto(id, "L", 2, BigDecimal.valueOf(200.0));
         given(productService.updateProduct(id, req)).willReturn(dto);
 
-        mvc.perform(put("/shop/api/v1/updateProduct/{id}", id)
+        mvc.perform(put("/shop/api/v1/products/{id}", id)
                         .with(jwt()
                                 .authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -79,7 +79,7 @@ class ShopControllerTest {
     @Test
     @DisplayName("updateProduct не разрешен, когда у нас пользователь не Admin")
     void update_forbidden_forUserRole() throws Exception {
-        mvc.perform(put("/shop/api/v1/updateProduct/{id}", UUID.randomUUID())
+        mvc.perform(put("/shop/api/v1/products/{id}", UUID.randomUUID())
                         .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_USER")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new ProductDtoRequest("X", 1, BigDecimal.valueOf(10.0)))))
@@ -96,7 +96,7 @@ class ShopControllerTest {
             List<OrderRequest> reqs = List.of(new OrderRequest(UUID.randomUUID(), 2));
             given(productService.checkOrder(reqs)).willReturn(true);
 
-            mvc.perform(post("/shop/api/v1/checkOrder")
+            mvc.perform(post("/shop/api/v1/stock-verifications")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(reqs)))
                     .andExpect(status().isOk())
@@ -111,7 +111,7 @@ class ShopControllerTest {
             List<OrderRequest> reqs = List.of(new OrderRequest(UUID.randomUUID(), 5));
             given(productService.getSumTotalPriceOrder(reqs)).willReturn(BigDecimal.valueOf(123.45));
 
-            mvc.perform(post("/shop/api/v1/getSumTotalPriceOrder")
+            mvc.perform(post("/shop/api/v1/price-calculations")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(reqs)))
                     .andExpect(status().isOk())
@@ -134,7 +134,7 @@ class ShopControllerTest {
             willDoNothing().given(productService)
                     .changeTotalQuantityProductsAfterCreateOrder(orderUuid, reqs);
 
-            mvc.perform(post("/shop/api/v1/changeTotalQuantityProductsAfterCreateOrder")
+            mvc.perform(post("/shop/api/v1/stock-deductions")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isOk());
@@ -150,7 +150,7 @@ class ShopControllerTest {
             willThrow(new InsufficientStockException("Недостаточно товара"))
                     .given(productService).changeTotalQuantityProductsAfterCreateOrder(orderUuid, reqs);
 
-            mvc.perform(post("/shop/api/v1/changeTotalQuantityProductsAfterCreateOrder")
+            mvc.perform(post("/shop/api/v1/stock-deductions")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(new StockChangeRequest(orderUuid, reqs))))
                     .andExpect(status().isConflict())
@@ -163,7 +163,7 @@ class ShopControllerTest {
             StockChangeRequest request = new StockChangeRequest(
                     UUID.randomUUID(), List.of(new OrderRequest(UUID.randomUUID(), -5)));
 
-            mvc.perform(post("/shop/api/v1/changeTotalQuantityProductsAfterCreateOrder")
+            mvc.perform(post("/shop/api/v1/stock-deductions")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isBadRequest());
@@ -177,7 +177,7 @@ class ShopControllerTest {
             willDoNothing().given(productService)
                     .changeTotalQuantityProductsAfterRefundedOrder(orderUuid, reqs);
 
-            mvc.perform(post("/shop/api/v1/changeTotalQuantityProductsAfterRefundedOrder")
+            mvc.perform(post("/shop/api/v1/stock-restorations")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(new StockChangeRequest(orderUuid, reqs))))
                     .andExpect(status().isOk());
@@ -199,7 +199,7 @@ class ShopControllerTest {
             given(productService.getAllProducts(PageRequest.of(0, 2, Sort.by("name").ascending())))
                     .willReturn(List.of(dto1, dto2));
 
-            mvc.perform(get("/shop/api/v1/getAllProducts")
+            mvc.perform(get("/shop/api/v1/products")
                             .param("page", "0")
                             .param("size", "2")
                             .param("sort", "name,asc"))
@@ -217,7 +217,7 @@ class ShopControllerTest {
             var dto = new ProductDto(id, "X", 7, BigDecimal.valueOf(77.0));
             given(productService.getProduct(id)).willReturn(dto);
 
-            mvc.perform(get("/shop/api/v1/getProducts/{id}", id))
+            mvc.perform(get("/shop/api/v1/products/{id}", id))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.quantity").value(7));
 
@@ -231,7 +231,7 @@ class ShopControllerTest {
             given(productService.getProduct(id))
                     .willThrow(new ProductNotFoundException("Not found"));
 
-            mvc.perform(get("/shop/api/v1/getProducts/{id}", id))
+            mvc.perform(get("/shop/api/v1/products/{id}", id))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.messageError").value("Not found"));
         }
@@ -243,7 +243,7 @@ class ShopControllerTest {
             var dto = new ProductDto(UUID.randomUUID(), "P", 3, BigDecimal.valueOf(300.0));
             given(productService.addProduct(req)).willReturn(dto);
 
-            mvc.perform(post("/shop/api/v1/addProduct")
+            mvc.perform(post("/shop/api/v1/products")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(req)))
                     .andExpect(status().isCreated())
@@ -258,7 +258,7 @@ class ShopControllerTest {
             UUID id = UUID.randomUUID();
             willDoNothing().given(productService).deleteProduct(id);
 
-            mvc.perform(delete("/shop/api/v1/deleteProduct/{id}", id))
+            mvc.perform(delete("/shop/api/v1/products/{id}", id))
                     .andExpect(status().isOk())
                     .andExpect(content().string("Товар с articleId = " + id + " успешно удален"));
 
@@ -272,7 +272,7 @@ class ShopControllerTest {
             willThrow(new ProductNotFoundException("Nope"))
                     .given(productService).deleteProduct(id);
 
-            mvc.perform(delete("/shop/api/v1/deleteProduct/{id}", id))
+            mvc.perform(delete("/shop/api/v1/products/{id}", id))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.messageError").value("Nope"));
         }
@@ -285,7 +285,7 @@ class ShopControllerTest {
             var out = new ProductDto(id, "L", 2, BigDecimal.valueOf(200.0));
             given(productService.updateProduct(id, req)).willReturn(out);
 
-            mvc.perform(put("/shop/api/v1/updateProduct/{id}", id)
+            mvc.perform(put("/shop/api/v1/products/{id}", id)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(req)))
                     .andExpect(status().isOk())
@@ -302,7 +302,7 @@ class ShopControllerTest {
             given(productService.updateProduct(id, req))
                     .willThrow(new ProductNotFoundException("Missing"));
 
-            mvc.perform(put("/shop/api/v1/updateProduct/{id}", id)
+            mvc.perform(put("/shop/api/v1/products/{id}", id)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(req)))
                     .andExpect(status().isNotFound())

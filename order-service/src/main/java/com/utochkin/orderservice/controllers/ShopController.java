@@ -18,19 +18,19 @@ import java.util.List;
 @FeignClient(name = "shop-service", path = "/shop/api/v1")
 public interface ShopController {
 
-    /** POST /checkOrder — хватает ли остатков на все позиции. */
-    @PostMapping("/checkOrder")
+    /** POST /stock-verifications — хватает ли остатков на все позиции. */
+    @PostMapping("/stock-verifications")
     Boolean checkOrder(@RequestBody List<OrderRequest> orderRequests);
 
-    /** POST /getSumTotalPriceOrder — сумма заказа (цена x количество). */
-    @PostMapping("/getSumTotalPriceOrder")
+    /** POST /price-calculations — сумма заказа (цена x количество). */
+    @PostMapping("/price-calculations")
     BigDecimal getSumTotalPriceOrder(@RequestBody List<OrderRequest> orderRequests);
 
-    /** POST ...AfterCreateOrder — идемпотентное списание остатков. */
-    @PostMapping("/changeTotalQuantityProductsAfterCreateOrder")
+    /** POST /stock-deductions — идемпотентное списание остатков. */
+    @PostMapping("/stock-deductions")
     void changeTotalQuantityProductsAfterCreateOrder(@RequestBody StockChangeRequest stockChangeRequest);
 
-    /** POST ...AfterRefundedOrder — идемпотентный возврат остатков. */
-    @PostMapping("/changeTotalQuantityProductsAfterRefundedOrder")
+    /** POST /stock-restorations — идемпотентный возврат остатков. */
+    @PostMapping("/stock-restorations")
     void changeTotalQuantityProductsAfterRefundedOrder(@RequestBody StockChangeRequest stockChangeRequest);
 }

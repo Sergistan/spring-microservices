@@ -21,16 +21,16 @@ import java.util.UUID;
 @FeignClient(name = "payment-service", path = "/payment/api/v1")
 public interface PaymentController {
 
-    /** POST /pay — оплата (идемпотентно по orderUuid). */
-    @PostMapping("/pay")
+    /** POST /payments — идемпотентная оплата (создание платежа). */
+    @PostMapping("/payments")
     PaymentResponse paymentOrder(@RequestBody AccountRequest accountRequest);
 
-    /** POST /refunded — возврат средств. */
-    @PostMapping("/refunded")
+    /** POST /refunds — идемпотентный возврат (создание возврата). */
+    @PostMapping("/refunds")
     PaymentResponse refundedOrder(@RequestBody AccountRequest accountRequest);
 
-    /** GET /{orderUuid} — сводка платежей (использует ReconciliationJob). */
-    @GetMapping("/{orderUuid}")
+    /** GET /payments/{orderUuid} — сводка платежей (использует ReconciliationJob). */
+    @GetMapping("/payments/{orderUuid}")
     OrderPaymentsResponse getOrderPayments(@PathVariable("orderUuid") UUID orderUuid);
 
 }

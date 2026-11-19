@@ -7,6 +7,7 @@ import com.utochkin.orderservice.dto.OrderDto;
 import com.utochkin.orderservice.exceptions.OrderNotFoundException;
 import com.utochkin.orderservice.models.Status;
 import com.utochkin.orderservice.models.User;
+import com.utochkin.orderservice.web.CardRequest;
 import com.utochkin.orderservice.web.CompositeRequest;
 import com.utochkin.orderservice.web.OrderRequest;
 import com.utochkin.orderservice.web.PaymentRequest;
@@ -59,7 +60,7 @@ public class OrderControllerTest {
     private final UUID orderUuid = UUID.randomUUID();
 
     @Test
-    @DisplayName("POST /order/api/v1/create — 201, новый пользователь и заказ")
+    @DisplayName("POST /order/api/v1/orders — 201, новый пользователь и заказ")
     void createOrder_NewUser_Returns201() throws Exception {
         List<OrderRequest> requests = List.of(
                 new OrderRequest(UUID.randomUUID(), 2),
@@ -82,7 +83,7 @@ public class OrderControllerTest {
         given(orderService.createOrder(eq(createdUser), any(UUID.class), eq(requests), eq(address)))
                 .willReturn(returned);
 
-        mvc.perform(post("/order/api/v1/create")
+        mvc.perform(post("/order/api/v1/orders")
                         .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         // эмулируем заголовки из JwtTokenFilter
@@ -101,7 +102,7 @@ public class OrderControllerTest {
     }
 
     @Test
-    @DisplayName("POST /order/api/v1/create — 400, товар не найден")
+    @DisplayName("POST /order/api/v1/orders — 400, товар не найден")
     void createOrder_InvalidRequest_Returns400() throws Exception {
         List<OrderRequest> requests = List.of(new OrderRequest(UUID.randomUUID(), 1000));
         CompositeRequest cr = new CompositeRequest(requests,
@@ -110,7 +111,7 @@ public class OrderControllerTest {
 
         given(orderService.checkOrder(requests)).willReturn(false);
 
-        mvc.perform(post("/order/api/v1/create")
+        mvc.perform(post("/order/api/v1/orders")
                         .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-User-SubId", "sub")
@@ -127,14 +128,15 @@ public class OrderControllerTest {
 
 
     @Test
-    @DisplayName("POST /order/api/v1/pay — 200, успешная оплата")
+    @DisplayName("POST /order/api/v1/orders/{uuid}/payments — 200, успешная оплата")
     void paymentOrder_Success() throws Exception {
-        PaymentRequest req = new PaymentRequest(orderUuid, "1234 5678 9012 3456");
+        CardRequest req = new CardRequest("1234 5678 9012 3456");
+        PaymentRequest expected = new PaymentRequest(orderUuid, "1234 5678 9012 3456");
         PaymentResponse resp = new PaymentResponse(UUID.randomUUID(), Status.SUCCESS);
 
-        given(orderService.paymentOrder(req, "sub")).willReturn(resp);
+        given(orderService.paymentOrder(expected, "sub")).willReturn(resp);
 
-        mvc.perform(post("/order/api/v1/pay")
+        mvc.perform(post("/order/api/v1/orders/{uuid}/payments", orderUuid)
                         .with(jwt())
                         .header("X-User-SubId", "sub")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -146,12 +148,13 @@ public class OrderControllerTest {
     }
 
     @Test
-    @DisplayName("POST /order/api/v1/pay — 404, заказ не найден")
+    @DisplayName("POST /order/api/v1/orders/{uuid}/payments — 404, заказ не найден")
     void paymentOrder_NotFound() throws Exception {
-        PaymentRequest req = new PaymentRequest(orderUuid, "1234 5678 9012 3456");
-        given(orderService.paymentOrder(req, "sub")).willThrow(new OrderNotFoundException());
+        CardRequest req = new CardRequest("1234 5678 9012 3456");
+        given(orderService.paymentOrder(new PaymentRequest(orderUuid, "1234 5678 9012 3456"), "sub"))
+                .willThrow(new OrderNotFoundException());
 
-        mvc.perform(post("/order/api/v1/pay")
+        mvc.perform(post("/order/api/v1/orders/{uuid}/payments", orderUuid)
                         .with(jwt())
                         .header("X-User-SubId", "sub")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -161,13 +164,13 @@ public class OrderControllerTest {
     }
 
     @Test
-    @DisplayName("POST /order/api/v1/pay — 403, заказ чужого пользователя")
+    @DisplayName("POST /order/api/v1/orders/{uuid}/payments — 403, заказ чужого пользователя")
     void paymentOrder_ForeignOwner_Forbidden() throws Exception {
-        PaymentRequest req = new PaymentRequest(orderUuid, "1234 5678 9012 3456");
-        given(orderService.paymentOrder(req, "sub"))
+        CardRequest req = new CardRequest("1234 5678 9012 3456");
+        given(orderService.paymentOrder(new PaymentRequest(orderUuid, "1234 5678 9012 3456"), "sub"))
                 .willThrow(new com.utochkin.orderservice.exceptions.OrderAccessDeniedException());
 
-        mvc.perform(post("/order/api/v1/pay")
+        mvc.perform(post("/order/api/v1/orders/{uuid}/payments", orderUuid)
                         .with(jwt())
                         .header("X-User-SubId", "sub")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -178,11 +181,11 @@ public class OrderControllerTest {
     }
 
     @Test
-    @DisplayName("POST /order/api/v1/refunded — 200, успешный возврат")
+    @DisplayName("POST /order/api/v1/orders/{uuid}/refunds — 200, успешный возврат")
     void refundedOrder_Success() throws Exception {
-        PaymentRequest req = new PaymentRequest(orderUuid, "1234 5678 9012 3456");
+        CardRequest req = new CardRequest("1234 5678 9012 3456");
 
-        mvc.perform(post("/order/api/v1/refunded")
+        mvc.perform(post("/order/api/v1/orders/{uuid}/refunds", orderUuid)
                         .with(jwt())
                         .header("X-User-SubId", "sub")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -193,13 +196,13 @@ public class OrderControllerTest {
     }
 
     @Test
-    @DisplayName("POST /order/api/v1/refunded — 404, заказ не найден")
+    @DisplayName("POST /order/api/v1/orders/{uuid}/refunds — 404, заказ не найден")
     void refundedOrder_NotFound() throws Exception {
-        PaymentRequest req = new PaymentRequest(orderUuid, "1234 5678 9012 3456");
+        CardRequest req = new CardRequest("1234 5678 9012 3456");
         willThrow(new OrderNotFoundException())
-                .given(orderService).refundedOrder(req, "sub");
+                .given(orderService).refundedOrder(new PaymentRequest(orderUuid, "1234 5678 9012 3456"), "sub");
 
-        mvc.perform(post("/order/api/v1/refunded")
+        mvc.perform(post("/order/api/v1/orders/{uuid}/refunds", orderUuid)
                         .with(jwt())
                         .header("X-User-SubId", "sub")
                         .contentType(MediaType.APPLICATION_JSON)

@@ -18,8 +18,9 @@ import java.util.UUID;
 
 /**
  * REST API платежей. Основной потребитель — order-service НАПРЯМУЮ через Eureka (мимо gateway):
- * POST /pay и /refunded — оплата/возврат заказа (Authorization = JWT пользователя или сервисный токен),
- * GET /{orderUuid} — сверка платежей для ReconciliationJob. Внешний контур закрыт на getaway-server.
+ * POST /payments и /refunds — создание платежа/возврата по заказу (Authorization = JWT пользователя
+ * или сервисный токен), GET /payments/{orderUuid} — сверка платежей для ReconciliationJob.
+ * Внешний контур закрыт на getaway-server.
  */
 @RestController
 @RequestMapping("/payment/api/v1")
@@ -28,20 +29,20 @@ public class PaymentController {
 
     private final PaymentService paymentService;
 
-    /** POST /pay: идемпотентная оплата заказа (вызывает order-service через Eureka). */
-    @PostMapping("/pay")
+    /** POST /payments: идемпотентное создание платежа — оплата заказа (вызывает order-service через Eureka). */
+    @PostMapping("/payments")
     PaymentResponse paymentOrder(@RequestBody @Valid AccountRequest accountRequest){
         return paymentService.paymentOrder(accountRequest);
     }
 
-    /** POST /refunded: идемпотентный возврат средств. */
-    @PostMapping("/refunded")
+    /** POST /refunds: идемпотентное создание возврата средств. */
+    @PostMapping("/refunds")
     PaymentResponse refundedOrder(@RequestBody @Valid AccountRequest accountRequest){
         return paymentService.refundedOrder(accountRequest);
     }
 
-    /** GET /{orderUuid}: сводка платежей для ReconciliationJob (order-service). */
-    @GetMapping("/{orderUuid}")
+    /** GET /payments/{orderUuid}: сводка платежей для ReconciliationJob (order-service). */
+    @GetMapping("/payments/{orderUuid}")
     OrderPaymentsResponse getOrderPayments(@PathVariable("orderUuid") UUID orderUuid) {
         return paymentService.getOrderPayments(orderUuid);
     }

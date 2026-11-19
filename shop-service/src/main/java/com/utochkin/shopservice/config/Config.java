@@ -4,6 +4,7 @@ import com.utochkin.shopservice.exceptions.CustomAccessDeniedHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -42,9 +43,9 @@ public class Config {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**", "/favicon.ico", "/actuator/prometheus").permitAll()
                         .requestMatchers("/actuator/health/**").permitAll()
-                        .requestMatchers("/shop/api/v1/addProduct/**").hasRole("ADMIN")
-                        .requestMatchers("/shop/api/v1/deleteProduct/**").hasRole("ADMIN")
-                        .requestMatchers("/shop/api/v1/updateProduct/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/shop/api/v1/products").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/shop/api/v1/products/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/shop/api/v1/products/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .oauth2ResourceServer(oauth2 -> oauth2
