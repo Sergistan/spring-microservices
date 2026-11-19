@@ -21,6 +21,13 @@ import org.springframework.util.backoff.FixedBackOff;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Обработка ошибок консьюмера (DLQ): если запись из topic-orders не обработалась после
+ * 2 ретраев (FixedBackOff 1с x2), DeadLetterPublishingRecoverer публикует её в topic-orders.DLT
+ * (та же партиция) с заголовками kafka_dlt-exception-*. Дальнейшую доставку не блокируем:
+ * при MANUAL_IMMEDIATE offset после recover коммитит сам error handler.
+ * Публикаторы: raw (byte[]) для битых при десериализации, json — для ошибок обработки.
+ */
 @Configuration
 @Log4j2
 public class KafkaErrorConfig {

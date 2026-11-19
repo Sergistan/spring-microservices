@@ -33,6 +33,15 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 
+/**
+ * Товарный каталог shop-service: чтение (с Redis-кэшем), CRUD администратора и — главное —
+ * атомарное изменение остатков для заказов:
+ *  - deductStock/restoreStock — одна строка UPDATE ... WHERE quantity >= :quantity (CHECK в БД):
+ *    списание не уводит остаток в минус, а результат 0 строк = товара не хватило;
+ *  - после любого изменения остатков кэш products/product инвалидируется (@CacheEvict);
+ *  - чтение каталога кэшируется с sync=true (одна нить греет кэш, остальные ждут).
+ * Вызывается и REST-ом (админ), и order-service через Feign (checkOrder/списание/возврат).
+ */
 @Service
 @RequiredArgsConstructor
 @Log4j2
@@ -42,6 +51,7 @@ public class ProductService {
     private final StockOperationRepository stockOperationRepository;
     private final ProductMapper productMapper;
 
+    /** Загрузка сущностей товаров по списку articleId (одним запросом IN). */
     private List<Product> fetchProducts(List<OrderRequest> orderRequests) {
         List<UUID> ids = orderRequests.stream()
                 .map(OrderRequest::getArticleId)
@@ -49,6 +59,7 @@ public class ProductService {
         return productRepository.findAllByArticleIds(ids);
     }
 
+    /** Проверка перед созданием заказа: у каждого артикула есть товар в нужном количестве. */
     @Transactional(readOnly = true)
     public Boolean checkOrder(List<OrderRequest> orderRequests) {
         log.info("ProductService: проверка остатков для {}", orderRequests);
@@ -69,6 +80,7 @@ public class ProductService {
 
     }
 
+    /** Сумма заказа: цена x количество по позициям, scale=2 HALF_UP; неизвестный артикул -> 404. */
     @Transactional(readOnly = true)
     public BigDecimal getSumTotalPriceOrder(List<OrderRequest> orderRequests) {
         log.info("ProductService: расчёт суммы для {}", orderRequests);
@@ -94,6 +106,13 @@ public class ProductService {
         return rounded;
     }
 
+    /**
+     * Списание остатков после создания заказа. Идемпотентность ДВУХ уровней:
+     *  1) маркер stock_operations (orderUuid + DEDUCT) — повторный вызов с тем же заказом пропускается;
+     *  2) атомарный UPDATE ... WHERE quantity >= n — списание не уводит в минус
+     *     (0 строк = InsufficientStockException -> вся транзакция откатывается).
+     * После успеха кэш каталога инвалидируется (@CacheEvict).
+     */
     @Transactional
     @CacheEvict(value = {"products", "product"}, allEntries = true)
     public void changeTotalQuantityProductsAfterCreateOrder(UUID orderUuid, List<OrderRequest> orderRequests) {
@@ -127,6 +146,10 @@ public class ProductService {
         log.info("ProductService: остатки обновлены");
     }
 
+    /**
+     * Возврат остатков после отмены заказа (идемпотентно по маркеру orderUuid + RESTORE).
+     * Если товар успели удалить — восстановление для него мягко пропускается (warn), остальные возвращаются.
+     */
     @Transactional
     @CacheEvict(value = {"products", "product"}, allEntries = true)
     public void changeTotalQuantityProductsAfterRefundedOrder(UUID orderUuid, List<OrderRequest> orderRequests) {
@@ -154,6 +177,7 @@ public class ProductService {
         log.info("ProductService: остатки восстановлены");
     }
 
+    /** Каталог постранично (Redis-кэш с ключом пагинации; sync=true — одну нить на прогрев). */
     @Transactional(readOnly = true)
     @Cacheable(value = "products", key = "#pageable.pageNumber + '-' + #pageable.pageSize + '-' + #pageable.sort.toString()", sync = true)
     public List<ProductDto> getAllProducts(Pageable pageable) {
@@ -162,6 +186,7 @@ public class ProductService {
         return productMapper.toListDto(productsPage.getContent());
     }
 
+    /** Карточка товара по articleId (кэш product, sync=true; 404 если не найден). */
     @Transactional(readOnly = true)
     @Cacheable(value = "product", key = "#articleId", sync = true)
     public ProductDto getProduct(UUID articleId) {
@@ -171,6 +196,7 @@ public class ProductService {
     }
 
 
+    /** Создание товара (роль ADMIN): новый articleId; кэш карточки пополняется, список инвалидируется. */
     @Transactional
     @Caching(
             put = {@CachePut(value = "product", key = "#result.articleId")},
@@ -184,6 +210,7 @@ public class ProductService {
         return productMapper.toDto(product);
     }
 
+    /** Удаление товара (роль ADMIN); весь кэш каталога инвалидируется. */
     @Transactional
     @CacheEvict(value = {"products", "product"}, allEntries = true)
     public void deleteProduct(UUID articleId) {
@@ -197,6 +224,7 @@ public class ProductService {
 
     }
 
+    /** Полное обновление карточки (роль ADMIN): кэш по articleId заменяется, список инвалидируется. */
     @Transactional
     @Caching(
             put = {@CachePut(value = "product", key = "#articleId")},

@@ -72,10 +72,18 @@ import static org.springframework.security.web.server.util.matcher.ServerWebExch
 //    }
 //}
 
+/**
+ * Две security-цепочки gateway (WebFlux):
+ *  1) @Order(1) oauth2LoginChain — swagger-ui/docs и OAuth2-флоу входа по Keycloak;
+ *  2) @Order(2) resourceServerChain — все api-маршруты order/shop/payment: только валидный JWT.
+ * Внутренние вызовы сервисов идут напрямую через Eureka, поэтому /payment/api/v1/** здесь
+ * тоже закрыт — внешний анонимный доступ к платежам невозможен.
+ */
 @Configuration
 @EnableWebFluxSecurity
 public class ReactiveConfig {
 
+    /** Цепочка 1 (@Order(1)): swagger/docs + OAuth2-логин по Keycloak; после входа — редирект в swagger-ui. */
     @Bean
     @Order(1)
     public SecurityWebFilterChain oauth2LoginChain(ServerHttpSecurity http) {
@@ -107,6 +115,7 @@ public class ReactiveConfig {
         return http.build();
     }
 
+    /** Цепочка 2 (@Order(2)): api-маршруты order/shop/payment — только валидный JWT (ресурс-сервер). */
     @Bean
     @Order(2)
     public SecurityWebFilterChain resourceServerChain(ServerHttpSecurity http) {
@@ -133,6 +142,7 @@ public class ReactiveConfig {
         return http.build();
     }
 
+    /** Конвертер realm-ролей JWT в Spring-authorities (нужно для hasRole на downstream-сервисах). */
     private Converter<Jwt, Mono<AbstractAuthenticationToken>> grantedAuthoritiesExtractor() {
         JwtAuthenticationConverter jwtAuthenticationConverter = new JwtAuthenticationConverter();
         jwtAuthenticationConverter.setJwtGrantedAuthoritiesConverter(new AuthServerRoleConverter());

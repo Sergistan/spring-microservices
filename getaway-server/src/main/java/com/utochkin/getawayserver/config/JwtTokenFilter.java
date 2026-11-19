@@ -83,6 +83,13 @@ import java.util.Objects;
 //}
 
 
+/**
+ * Шлюзовый фильтр после проверки JWT (resource server): раскладывает claim'ы токена
+ * в доверенные заголовки X-User-* (SubId/UserName/FirstName/LastName/Email/Role) и проксирует
+ * их в order/shop. Claim'ы извлекаются null-safe — сервисные токены client_credentials
+ * не содержат пользовательских полей (пустые строки), sub есть всегда.
+ * Заголовки можно доверять: извне они затираются (только gateway их ставит после валидации JWT).
+ */
 @Component
 @Log4j2
 public class JwtTokenFilter implements GlobalFilter, Ordered {
@@ -97,6 +104,11 @@ public class JwtTokenFilter implements GlobalFilter, Ordered {
     }
 
     @SneakyThrows
+    /**
+     * Есть Bearer -> распарсить (проверка подписи по RSA-ключу realm'а) и мутировать запрос,
+     * перезаписав заголовки X-User-* значениями из claim'ов. Перезапись = внешний
+     * спуфинг X-User-* невозможен: значение из запроса клиента заменяется нашим.
+     */
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
@@ -135,10 +147,12 @@ public class JwtTokenFilter implements GlobalFilter, Ordered {
         return chain.filter(exchange);
     }
 
+    /** Claim как строка; отсутствует (сервисные токены) -> пустая строка. */
     private String claimOrEmpty(Claims claims, String name) {
         return Objects.toString(claims.get(name), "");
     }
 
+    /** Первая роль клиента spring-microservices из resource_access; нет -> UNKNOWN. */
     private String extractRole(Claims claims) {
         Map<String, Object> resourceAccess = claims.get("resource_access", Map.class);
         if (resourceAccess == null) {
@@ -154,7 +168,8 @@ public class JwtTokenFilter implements GlobalFilter, Ordered {
     }
 
 
-        private Claims parseJwtToken(String token) throws Exception {
+    /** Разбор и проверка подписи JWT (jjwt, RSA public key realm'а из config-repo). */
+    private Claims parseJwtToken(String token) throws Exception {
         PublicKey key = readRsaPublicKey(publicKey);
 
         return Jwts.parser()
@@ -164,6 +179,7 @@ public class JwtTokenFilter implements GlobalFilter, Ordered {
                 .getPayload();
     }
 
+    /** DER -> PublicKey из PEM-строки публичного ключа realm'а (JWT_PUBLIC_KEY в config-repo). */
     private static PublicKey readRsaPublicKey(String pemEncodedKey) throws Exception {
 
         String publicKeyPEM = pemEncodedKey

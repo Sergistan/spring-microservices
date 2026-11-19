@@ -10,6 +10,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * Дедупликация at-least-once доставки: tryAcquire = SETNX eventId в Redis с TTL
+ * («кто первый, тот и обработал»). Повторная доставка того же eventId видит false и пропускается.
+ * Fail-open: при недоступном Redis ключ НЕ занимается (возвращаем true) — лучше отправить
+ * дубликат письма, чем потерять уведомление; при сбое отправки ключ освобождается (release).
+ */
 @Component
 @RequiredArgsConstructor
 @Log4j2
@@ -20,6 +26,10 @@ public class RedisProcessedEventsStore {
 
     private final StringRedisTemplate redisTemplate;
 
+    /**
+     * Захват события: SETNX eventId со TTL 24ч. true — мы первые, обрабатываем;
+     * false — дубль. Redis недоступен -> true (fail-open: лучше дубль письма, чем потеря).
+     */
     public boolean tryAcquire(UUID eventId) {
         if (eventId == null) {
             return true;
@@ -35,6 +45,7 @@ public class RedisProcessedEventsStore {
         }
     }
 
+    /** Освобождение ключа при сбое обработки — повторная доставка снова пройдёт дедупликацию. */
     public void release(UUID eventId) {
         if (eventId == null) {
             return;

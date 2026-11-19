@@ -18,6 +18,13 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 
+/**
+ * Консьюмер события topic-orders -> история заказов пользователя в MongoDB.
+ * Документ OrderHistory: одна запись на username, события добавляются атомарным
+ * upsert с $push в массив orders (никаких read-modify-write). Дедупликация at-least-once:
+ * insert маркера eventId (unique index); дубль -> пропуск; сбой сохранения -> маркер удаляется,
+ * ack НЕ делается -> ретраи -> topic-orders.DLT.
+ */
 @Service
 @AllArgsConstructor
 @Log4j2
@@ -27,6 +34,11 @@ public class OrderHistoryService {
     private final ProcessedEventRepository processedEventRepository;
     private final MongoTemplate mongoTemplate;
 
+    /**
+     * Слушатель topic-orders: без eventId -> сохранить сразу; маркер вставлен -> сохранить;
+     * дубль маркера (unique index) -> пропуск. ack только после успеха; сбой -> маркер удалён,
+     * без ack (ретраи -> DLT). Подробности — javadoc класса.
+     */
     @KafkaListener(topics = "topic-orders", groupId = "history-group")
     public void consume(OrderDtoForKafka orderDto, Acknowledgment ack) {
         log.info("OrderHistoryService: получено сообщение из Kafka: {}", orderDto);
@@ -58,6 +70,7 @@ public class OrderHistoryService {
         }
     }
 
+    /** Атомарное добавление события в массив orders документа пользователя (upsert + $push). */
     private void appendToHistory(OrderDtoForKafka orderDto) {
         String username = orderDto.getUserDto().username();
         mongoTemplate.upsert(

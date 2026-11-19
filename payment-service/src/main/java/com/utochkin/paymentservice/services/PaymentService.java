@@ -16,6 +16,11 @@ import org.springframework.stereotype.Service;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * Фасад платёжного API: делегирует транзакционные операции PaymentTxService (pay/refund)
+ * и отвечает на сверку getOrderPayments — «была ли оплата/возврат по заказу и какой paymentId».
+ * getOrderPayments использует ReconciliationJob в order-service для спасения застрявших заказов.
+ */
 @Service
 @RequiredArgsConstructor
 @Log4j2
@@ -24,6 +29,7 @@ public class PaymentService {
     private final PaymentTxService paymentTxService;
     private final PaymentRepository paymentRepository;
 
+    /** Сводка платежей заказа для сверки (ReconciliationJob): paid/refunded/paymentId. */
     public OrderPaymentsResponse getOrderPayments(UUID orderUuid) {
         Optional<Payment> payment = paymentRepository.findByOrderUuidAndType(orderUuid, PaymentType.PAYMENT);
         boolean refunded = paymentRepository.findByOrderUuidAndType(orderUuid, PaymentType.REFUND).isPresent();
@@ -33,6 +39,12 @@ public class PaymentService {
         return new OrderPaymentsResponse(orderUuid, paid, refunded, paymentId);
     }
 
+    /**
+     * Идемпотентная оплата: платёж по заказу уже есть -> вернуть сохранённый результат;
+     * гонка (двое прошли проверку одновременно) -> уникальный индекс в PaymentTxService
+     * приводит к DataIntegrityViolation -> возвращаем результат «победителя». Деньги
+     * списываются не более одного раза при любом числе повторов.
+     */
     public PaymentResponse paymentOrder(AccountRequest accountRequest) {
         log.info("PaymentService: попытка списания {} с карты {} по заказу {}",
                 accountRequest.getTotalAmount(),
@@ -58,6 +70,7 @@ public class PaymentService {
         }
     }
 
+    /** Идемпотентный возврат — схема та же, что и у paymentOrder (сохранённый результат/победитель гонки). */
     public PaymentResponse refundedOrder(AccountRequest accountRequest) {
         log.info("PaymentService: возврат {} на карту {} по заказу {}",
                 accountRequest.getTotalAmount(),

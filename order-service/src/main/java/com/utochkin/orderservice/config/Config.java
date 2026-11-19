@@ -9,9 +9,19 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 
+/**
+ * Security-конфигурация order-service: все /order/api/v1/** требуют JWT (Keycloak, issuer из config-repo),
+ * публично открыты только swagger-docs и health/prometheus. Проверенный JWT попадает в SecurityContext —
+ * оттуда его ретранслирует в исходящие Feign-вызовы FeignUserTokenRelayInterceptor.
+ */
 @Configuration
 @EnableWebSecurity
 public class Config {
+    /**
+     * Цепочка фильтров: stateless (без сессий), все запросы — с валидным JWT,
+     * публично только swagger/health/prometheus. Валидный токен кладёт
+     * JwtAuthenticationToken в SecurityContext (оттуда его забирает FeignUserTokenRelayInterceptor).
+     */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http

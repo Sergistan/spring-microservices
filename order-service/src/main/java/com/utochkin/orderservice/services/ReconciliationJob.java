@@ -11,6 +11,12 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * Фоновая джоба самовосстановления: находит заказы, застрявшие в PROCESSING/STOCK_PENDING дольше
+ * order.reconciliation.stuck-threshold-minutes, и для каждого вызывает OrderService.reconcile —
+ * сверку с payment-service (платёж прошёл/возвращён/отсутствует) с последующей фиксацией
+ * финального статуса или откатом списания остатков.
+ */
 @Component
 @Log4j2
 public class ReconciliationJob {
@@ -26,6 +32,11 @@ public class ReconciliationJob {
         this.orderService = orderService;
     }
 
+    /**
+     * Такт джобы (fixed-delay из config-repo): взять до 50 заказов в PROCESSING/STOCK_PENDING,
+     * не обновлявшихся дольше stuck-threshold-minutes, и сверить каждый с payment через
+     * OrderService.reconcile. Ошибка одного заказа не валит цикл — он повторится в следующем такте.
+     */
     @Scheduled(fixedDelayString = "${order.reconciliation.fixed-delay:60000}")
     public void reconcile() {
         LocalDateTime threshold = LocalDateTime.now().minusMinutes(stuckThresholdMinutes);

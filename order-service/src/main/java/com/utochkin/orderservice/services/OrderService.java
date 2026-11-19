@@ -43,6 +43,21 @@ import java.util.UUID;
 import static com.utochkin.orderservice.models.Status.REFUNDED;
 
 
+/**
+ * Оркестрация жизненного цикла заказа: создание, оплата, возврат, сверка застрявших заказов.
+ *
+ * Ключевые механики:
+ *  - createOrder — 3 шага: INSERT со статусом STOCK_PENDING -> атомарное списание остатков в shop
+ *    -> CAS-переключение в WAITING_FOR_PAYMENT; если списание упало — заказ остаётся в STOCK_PENDING,
+ *    и его подберёт ReconciliationJob (защита от «осиротевших» списаний);
+ *  - paymentOrder/refundedOrder — проверка владельца (X-User-SubId, чужим 403), CAS-статусы
+ *    (конкурентная оплата одного заказа невозможна), идемпотентные вызовы payment;
+ *  - reconcile — сверка застрявшего заказа с payment (оплачен/возвращён/платежа нет)
+ *    с фиксацией финального статуса или откатом списания остатков.
+ *
+ * Данные: PostgreSQL (orders, outbox), Feign -> shop-service / payment-service (через Eureka);
+ * события заказа публикуются в Kafka опосредованно — через OutboxService/OutboxRelay.
+ */
 @Service
 @RequiredArgsConstructor
 @Log4j2
@@ -62,6 +77,10 @@ public class OrderService {
     private final OutboxService outboxService;
     private final TransactionTemplate transactionTemplate;
 
+    /**
+     * Фиксация результата платежа (pay/refund) в одной транзакции: обновить статус и paymentId
+     * заказа, собрать событие OrderDtoForKafka и записать его в outbox (публикация — OutboxRelay).
+     */
     private void finalizePaymentResult(UUID orderUuid, PaymentResponse paymentResponse) {
         transactionTemplate.executeWithoutResult(status -> {
             Order order = orderRepository.findByOrderUuid(orderUuid).orElseThrow(OrderNotFoundException::new);
@@ -85,6 +104,10 @@ public class OrderService {
         log.info("OrderService: заказ {} переведён в {}, событие зафиксировано в outbox", orderUuid, paymentResponse.getStatus());
     }
 
+    /**
+     * Проверка наличия всех товаров заказа в shop-service (Feign, с retry и circuit breaker).
+     * Fallback превращает недоступность shop в понятную 503-ошибку пользователю.
+     */
     @Transactional(readOnly = true)
     @CircuitBreaker(name = "circuitBreakerCheckOrder", fallbackMethod = "fallbackMethodCheckOrder")
     @Retry(name = "retryCheckOrder", fallbackMethod = "fallbackMethodCheckOrder")
@@ -93,11 +116,19 @@ public class OrderService {
         return shopController.checkOrder(orderRequests);
     }
 
+    /** Fallback checkOrder: исчерпаны retry/circuit breaker — сервис магазина недоступен. */
     public Boolean fallbackMethodCheckOrder(List<OrderRequest> orderRequests, Throwable throwable) {
         log.error("Fallback для checkOrder сработал из-за: {}", throwable.getMessage());
         throw new ServiceUnavailableException("Сервис временно недоступен, пожалуйста, повторите попытку позже");
     }
 
+    /**
+     * Создание заказа в 3 шага (защита от осиротевших списаний):
+     *  1) сумма по позициям у shop-service;
+     *  2) INSERT заказа со статусом STOCK_PENDING + позиции (DataIntegrityViolation = повтор
+     *     с тем же orderUuid от предыдущей попытки — идемпотентно продолжаем);
+     *  3) finalizeStock — списание остатков в shop и CAS-переход в WAITING_FOR_PAYMENT.
+     */
     @CircuitBreaker(name = "circuitBreakerCreateOrder", fallbackMethod = "fallbackMethodCreateOrder")
     @Retry(name = "retryCreateOrder", fallbackMethod = "fallbackMethodCreateOrder")
     public OrderDto createOrder(User user, UUID orderUuid, List<OrderRequest> orderRequests, AddressDto addressDto) {
@@ -107,6 +138,7 @@ public class OrderService {
 
         try {
             transactionTemplate.executeWithoutResult(status -> {
+                // Шаг 1: фиксируем заказ «просечно» — до списания остатков
                 Order order = Order.builder()
                         .orderUuid(orderUuid)
                         .totalAmount(totalAmount)
@@ -135,6 +167,11 @@ public class OrderService {
         return orderMapper.toDto(result, userMapper.toDto(user), addressDto, orderRequests);
     }
 
+    /**
+     * Шаг 3 создания: списать остатки в shop и перевести заказ STOCK_PENDING -> WAITING_FOR_PAYMENT.
+     * Товар кончился (409/404 от shop): заказ атомарно переводится в FAILED (rollback-guard:
+     * transitionStatus сработает только если статус ещё STOCK_PENDING).
+     */
     public void finalizeStock(UUID orderUuid, List<OrderRequest> orderRequests) {
         try {
             shopController.changeTotalQuantityProductsAfterCreateOrder(new StockChangeRequest(orderUuid, orderRequests));
@@ -152,6 +189,7 @@ public class OrderService {
         log.info("OrderService: списание подтверждено, заказ {} переведён в WAITING_FOR_PAYMENT", orderUuid);
     }
 
+    /** Fallback createOrder: бизнес-ошибки (товара нет) пробрасываем как есть, прочее — 503. */
     public void fallbackMethodCreateOrder(User user, UUID orderUuid, List<OrderRequest> orderRequests, AddressDto addressDto, Throwable throwable) {
         if (throwable instanceof FeignException fe) {
             if (fe.status() == HttpStatus.CONFLICT.value() || fe.status() == HttpStatus.NOT_FOUND.value()) {
@@ -166,6 +204,12 @@ public class OrderService {
         throw new ServiceUnavailableException("Сервис временно недоступен, пожалуйста, повторите попытку позже");
     }
 
+    /**
+     * Оплата заказа: проверка владельца (X-User-SubId, чужим 403) -> запрет повторной оплаты
+     * по статусу -> CAS-захват PROCESSING (transitionStatus по PAYABLE_STATUSES; 0 строк =
+     * конкурент уже оплатил) -> вызов payment -> finalizePaymentResult (статус + событие в outbox).
+     * FAILED-ответ payment пробрасываем как FailedPayOrderException (HTTP клиенту).
+     */
     @CircuitBreaker(name = "circuitBreakerPayOrder", fallbackMethod = "fallbackMethodPayOrder")
     @Retry(name = "retryPayOrder", fallbackMethod = "fallbackMethodPayOrder")
     public PaymentResponse paymentOrder(PaymentRequest paymentRequest, String subId) {
@@ -203,6 +247,7 @@ public class OrderService {
         return paymentResponse;
     }
 
+    /** Fallback paymentOrder: бизнес-ошибки payment пробрасываем, технические — 503. */
     public PaymentResponse fallbackMethodPayOrder(PaymentRequest paymentRequest, String subId, Throwable throwable) {
         extractedFullbackMethod(paymentRequest, throwable);
         log.error("Fallback для paymentOrder сработал из-за: {}", throwable.getMessage());
@@ -210,6 +255,11 @@ public class OrderService {
     }
 
 
+    /**
+     * Возврат оплаченного заказа: проверка владельца (403 чужим) -> только статус SUCCESS
+     * годен -> CAS-захват PROCESSING -> возврат средств в payment -> в одной транзакции:
+     * вернуть остатки в shop, удалить позиции, статус REFUNDED, событие в outbox.
+     */
     @CircuitBreaker(name = "circuitBreakerRefundedOrder", fallbackMethod = "fallbackMethodRefundedOrder")
     @Retry(name = "retryRefundedOrder", fallbackMethod = "fallbackMethodRefundedOrder")
     public void refundedOrder(PaymentRequest paymentRequest, String subId) {
@@ -270,12 +320,18 @@ public class OrderService {
         }
     }
 
+    /** Fallback refundedOrder: карта не найдена/нет средств/неверный статус — как есть, прочее — 503. */
     public void fallbackMethodRefundedOrder(PaymentRequest paymentRequest, String subId, Throwable throwable) {
         extractedFullbackMethod(paymentRequest, throwable);
         log.error("Fallback для refundedOrder сработал из-за: {}", throwable.getMessage());
         throw new ServiceUnavailableException("Сервис временно недоступен, пожалуйста, повторите попытку позже");
     }
 
+    /**
+     * Общий разбор ошибок для fallback'ов pay/refund: переводит Feign-статусы payment-сервиса
+     * в доменные исключения (404 -> карта не найдена, 402 -> не хватает средств),
+     * а доменные исключения пробрасывает без двойной обёртки.
+     */
     private static void extractedFullbackMethod(PaymentRequest paymentRequest, Throwable throwable) {
         if (throwable instanceof FeignException fe) {
             if (fe.status() == HttpStatus.NOT_FOUND.value()) {
@@ -295,6 +351,7 @@ public class OrderService {
         }
     }
 
+    /** Маскировка номера карты для логов: видны только последние 4 цифры. */
     private static String maskCard(String cardNumber) {
         if (cardNumber == null || cardNumber.length() < 4) {
             return "****";
@@ -302,6 +359,11 @@ public class OrderService {
         return "**** **** **** " + cardNumber.substring(cardNumber.length() - 4);
     }
 
+    /**
+     * Точка входа сверки (вызывает ReconciliationJob): STOCK_PENDING — повторить попытку
+     * списания (создание оборвалось до finalizeStock); PROCESSING — спросить payment
+     * о платежах и финализировать/расфиксировать заказ (reconcileStuckOrder).
+     */
     public void reconcile(Order order) {
         if (order.getOrderStatus() == Status.STOCK_PENDING) {
             log.info("OrderService: reconciliation: заказ {} в STOCK_PENDING — повторная попытка списания", order.getOrderUuid());
@@ -316,12 +378,18 @@ public class OrderService {
         reconcileStuckOrder(order, payments);
     }
 
+    /** Positions заказа -> List<OrderRequest> (для команд shop и событий Kafka). */
     private List<OrderRequest> toOrderRequests(List<ProductInfo> productInfos) {
         return productInfos.stream()
                 .map(productInfo -> new OrderRequest(productInfo.getArticleId(), productInfo.getQuantity()))
                 .toList();
     }
 
+    /**
+     * Решение по застрявшему в PROCESSING заказу по ответу payment:
+     * refund был -> REFUNDED (+возврат остатков), платёж есть -> SUCCESS,
+     * платежа нет -> CAS-возврат в WAITING_FOR_PAYMENT (0 строк = кто-то уже сдвинул).
+     */
     public void reconcileStuckOrder(Order order, OrderPaymentsResponse payments) {
         if (payments.refunded()) {
             finalizeReconciledRefund(order, payments);
@@ -338,6 +406,10 @@ public class OrderService {
         }
     }
 
+    /**
+     * Сверка «платёж прошёл»: фиксируем SUCCESS + событие в outbox.
+     * Rollback-guard: если статус уже не PROCESSING (кто-то успел) — откат без изменений.
+     */
     private void finalizeReconciledSuccess(Order order, OrderPaymentsResponse payments) {
         transactionTemplate.executeWithoutResult(status -> {
             Order fresh = orderRepository.findByOrderUuid(order.getOrderUuid()).orElseThrow(OrderNotFoundException::new);
@@ -354,6 +426,10 @@ public class OrderService {
         });
     }
 
+    /**
+     * Сверка «возврат прошёл»: вернуть остатки в shop, удалить позиции, REFUNDED + событие.
+     * Rollback-guard аналогично finalizeReconciledSuccess.
+     */
     private void finalizeReconciledRefund(Order order, OrderPaymentsResponse payments) {
         transactionTemplate.executeWithoutResult(status -> {
             Order fresh = orderRepository.findByOrderUuid(order.getOrderUuid()).orElseThrow(OrderNotFoundException::new);
@@ -382,6 +458,7 @@ public class OrderService {
         });
     }
 
+    /** Сборка события OrderDtoForKafka из сохранённого заказа (мапперы user/address/positions). */
     private OrderDtoForKafka toKafkaDto(Order order) {
         return orderMapper.toDtoForKafka(
                 order,

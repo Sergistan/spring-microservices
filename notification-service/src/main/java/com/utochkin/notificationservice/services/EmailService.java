@@ -7,6 +7,10 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
+/**
+ * Формирование и отправка письма (JavaMailSender, SMTP-учётка из config-repo в {cipher}).
+ * Текст собирается по статусу заказа: SUCCESS — детали заказа и адрес, FAILED/REFUNDED — короткие шаблоны.
+ */
 @Service
 @AllArgsConstructor
 @Log4j2
@@ -14,6 +18,7 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
 
+    /** Отправка письма (SimpleMailMessage через JavaMailSender; SMTP-учётка из config-repo). */
     public void sendOrderNotification(String to, String subject, String text) {
         log.info("EmailService: отправка уведомления на {}: {}", to, subject);
         SimpleMailMessage message = new SimpleMailMessage();

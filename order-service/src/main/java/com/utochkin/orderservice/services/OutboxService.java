@@ -12,6 +12,11 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * Запись событий заказа в таблицу outbox В ТОЙ ЖЕ транзакции, что и изменение заказа:
+ * либо заказ и событие фиксируются вместе, либо ничего. Сама публикация в Kafka —
+ * задача OutboxRelay (см.); эта связка и называется transactional outbox.
+ */
 @Service
 @RequiredArgsConstructor
 @Log4j2
@@ -20,6 +25,11 @@ public class OutboxService {
     private final OutboxRepository outboxRepository;
     private final ObjectMapper objectMapper;
 
+    /**
+     * Сериализует событие в JSON и сохраняет в outbox в ТЕКУЩЕЙ транзакции вызывающего
+     * (поэтому без @Transactional здесь: запись фиксируется/откатывается вместе с заказом).
+     * eventId генерируется при отсутствии — по нему консьюмеры дедуплицируют повторы.
+     */
     public void saveToOutbox(OrderDtoForKafka dto) {
         if (dto.getEventId() == null) {
             dto.setEventId(UUID.randomUUID());

@@ -28,6 +28,12 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
+/**
+ * Входная точка REST API заказов (приходят через getaway-server, 8072 -> 8180).
+ * Помимо JWT проверку получает заголовки X-User-* (инжектирует JwtTokenFilter гейтвея):
+ * create использует их для создания локального пользователя, pay/refunded — для проверки
+ * владельца заказа (чужому 403). Ответы: 201 + OrderDto при создании, PaymentResponse при оплате.
+ */
 @RestController
 @RequestMapping("/order/api/v1")
 @RequiredArgsConstructor
@@ -37,6 +43,11 @@ public class OrderController {
     private final UserService userService;
     private final OrderService orderService;
 
+    /**
+     * POST /create: создание заказа. Порядок: URL-decode ФИО из заголовков -> найти/создать
+     * локального пользователя по subId+username -> checkOrder (наличие товаров в shop) ->
+     * createOrder (STOCK_PENDING -> списание -> WAITING_FOR_PAYMENT). 201 + OrderDto.
+     */
     @PostMapping("/create")
     @Operation(summary = "Создание заказа")
     @ApiResponses(value = {
@@ -58,10 +69,12 @@ public class OrderController {
                                                  description = "Ввод списка товаров для покупки и адреса доставки заказа", required = true) @Valid CompositeRequest compositeRequest
     ) {
 
+        // Заголовки X-User-* приходит URL-encoded (кириллица ФИО) — декодируем
         firstName = URLDecoder.decode(firstName, StandardCharsets.UTF_8);
         lastName = URLDecoder.decode(lastName, StandardCharsets.UTF_8);
         User user;
 
+        // Первый заказ пользователя -> создаём локальную запись из заголовков
         if (!userService.isUserExistsByUsername(subId, username)) {
             user = userService.createUser(subId, username, firstName, lastName, email, role);
         } else {
@@ -76,6 +89,7 @@ public class OrderController {
         }
     }
 
+    /** POST /pay: оплата заказа владельцем (subId из X-User-SubId; чужим 403, повторная оплата 400). */
     @PostMapping("/pay")
     @Operation(summary = "Оплата заказа")
     @ApiResponses(value = {
@@ -92,6 +106,7 @@ public class OrderController {
         return new ResponseEntity<>(orderService.paymentOrder(paymentRequest, subId), HttpStatus.OK);
     }
 
+    /** POST /refunded: отмена оплаченного заказа (только владелец; возврат средств и остатков). */
     @PostMapping("/refunded")
     @Operation(summary = "Отмена заказа")
     @ApiResponses(value = {

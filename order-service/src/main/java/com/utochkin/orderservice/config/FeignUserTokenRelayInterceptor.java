@@ -8,6 +8,12 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 
+/**
+ * Подстановка Authorization во ВСЕ исходящие Feign-вызовы order-service:
+ * веб-поток — ретранслируется JWT пользователя из SecurityContext (вызовы «от имени» пользователя);
+ * фоновый поток (SecurityContext пуст) — подставляется сервисный токен из ServiceTokenClient;
+ * если и он недоступен — вызов уходит без Authorization и получит 401 (обработает resilience4j).
+ */
 @Component
 @Log4j2
 public class FeignUserTokenRelayInterceptor implements RequestInterceptor {

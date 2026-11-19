@@ -9,7 +9,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
+/**
+ * Платежи; уникальность (orderUuid+type) на уровне БД — защита от двойной оплаты/возврата.
+ */
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
+    /** Единственный платёж заказа по типу (PAYMENT/REFUND) — опора идемпотентности и сверки. */
     Optional<Payment> findByOrderUuidAndType(UUID orderUuid, PaymentType type);
 }

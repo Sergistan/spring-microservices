@@ -22,8 +22,13 @@ import java.util.Arrays;
 //    }
 //}
 
+/**
+ * Настройка MongoDB: конвертеры LocalDateTime <-> String для корректной сериализации дат
+ * в документах истории (пишем ISO-строку, читаем обратно в LocalDateTime).
+ */
 @Configuration
 public class MongoConfig {
+    /** Регистрация конвертеров LocalDateTime <-> ISO-строка для документов MongoDB. */
     @Bean
     public MongoCustomConversions customConversions() {
         return new MongoCustomConversions(Arrays.asList(

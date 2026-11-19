@@ -14,6 +14,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Фоновый релей transactional outbox: по расписанию забирает пачку неотправленных событий из
+ * таблицы outbox (SELECT ... FOR UPDATE SKIP LOCKED — параллельные инстансы не захватывают одни строки),
+ * публикует их в Kafka (topic-orders) и помечает отправленными в той же транзакции.
+ * Отсюда at-least-once доставка событий заказа: фиксация заказа и запись события — одна транзакция,
+ * публикация — отдельным шагом, который можно безопасно повторять.
+ */
 @Component
 @RequiredArgsConstructor
 @Log4j2
@@ -27,6 +34,13 @@ public class OutboxRelay {
     private final TransactionTemplate transactionTemplate;
 
     @Scheduled(fixedDelayString = "${outbox.relay.fixed-delay:1000}")
+    /**
+     * Один цикл релея (по расписанию + вызывается тестами):
+     *  1) lockBatch — забрать пачку событий FOR UPDATE SKIP LOCKED (другие инстансы возьмут другие строки);
+     *  2) для каждого: десериализовать payload -> send в topic-orders (синхронно, до 10с) -> удалить из outbox;
+     *  3) любая ошибка отправки прерывает БАТЧ (транзакция откатывает удаления) — все события
+     *     батча останутся в outbox и уйдут на следующем цикле (at-least-once, дубли отсеют консьюмеры).
+     */
     public void pollOnce() {
         transactionTemplate.executeWithoutResult(status -> {
             List<OutboxEvent> batch = outboxRepository.lockBatch();

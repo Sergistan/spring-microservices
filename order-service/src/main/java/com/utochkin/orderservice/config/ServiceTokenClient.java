@@ -16,6 +16,12 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 
+/**
+ * Получение и кэширование сервисного токена (grant client_credentials, регистрация keycloak-service
+ * в config-repo) для ФОНОВЫХ вызовов без пользователя: ReconciliationJob и другие @Scheduled-потоки,
+ * где SecurityContext пуст. Токен кэшируется до exp-30с и перезапрашивается одним потоком (synchronized).
+ * Подробный разбор — в одобренном плане Plannotator «Разбор ServiceTokenClient».
+ */
 @Component
 @Log4j2
 public class ServiceTokenClient {

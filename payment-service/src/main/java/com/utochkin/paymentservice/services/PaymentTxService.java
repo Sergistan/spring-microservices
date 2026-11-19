@@ -20,6 +20,15 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * Платёжные операции В ОДНОЙ транзакции БД — «сердце» идемпотентности payment-service:
+ *
+ *  - pay: атомарный withdraw (UPDATE баланса; 0 строк = недостаточно средств -> FAILED без записи),
+ *    затем insert Payment с УНИКАЛЬНЫМ (orderUuid + type). Если конкурентный платёж уже зафиксирован,
+ *    insert падает по unique-констрейнту -> ВСЯ транзакция откатывается, включая списание денег
+ *    (двойная оплата одного заказа невозможна, деньги не теряются);
+ *  - refund: аналогично — возврат на баланс + insert REFUND-платежа, уникальность защищает от двойного возврата.
+ */
 @Service
 @RequiredArgsConstructor
 @Log4j2
@@ -28,6 +37,10 @@ public class PaymentTxService {
     private final AccountRepository accountRepository;
     private final PaymentRepository paymentRepository;
 
+    /**
+     * Оплата в одной транзакции: withdraw (0 строк = недостаток средств -> FAILED)
+     * -> insert Payment (unique orderUuid+type; конкурент -> откат всего, включая списание).
+     */
     @Transactional
     public PaymentResponse pay(AccountRequest accountRequest) {
         String maskedCard = maskCard(accountRequest.getCardNumber());
@@ -68,6 +81,7 @@ public class PaymentTxService {
         return new PaymentResponse(payment.getPaymentId(), Status.SUCCESS);
     }
 
+    /** Возврат в одной транзакции: депозит на карту + insert REFUND-платежа (аналогичные гарантии). */
     @Transactional
     public PaymentResponse refund(AccountRequest accountRequest) {
         Payment originalPayment = paymentRepository.findByOrderUuidAndType(accountRequest.getOrderUuid(), PaymentType.PAYMENT)
@@ -114,6 +128,7 @@ public class PaymentTxService {
         return new PaymentResponse(originalPayment.getPaymentId(), Status.REFUNDED);
     }
 
+    /** Маскировка карты для логов: видны только последние 4 цифры. */
     static String maskCard(String cardNumber) {
         if (cardNumber == null || cardNumber.length() < 4) {
             return "****";
