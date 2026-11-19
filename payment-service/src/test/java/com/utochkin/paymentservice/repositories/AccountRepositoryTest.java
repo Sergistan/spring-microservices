@@ -8,7 +8,10 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.ComponentScan.Filter;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.TestPropertySource;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;import org.springframework.test.context.TestPropertySource;
 
 import java.util.Optional;
 
@@ -22,12 +25,18 @@ import java.math.BigDecimal;
         )
 )
 @TestPropertySource(properties = {
-        "spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1",
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.liquibase.enabled=false"
 })
 @ActiveProfiles("test")
+@Testcontainers(disabledWithoutDocker = true)
 public class AccountRepositoryTest {
+
+    // Реальный PostgreSQL в docker-контейнере: @ServiceConnection подставляет реквизиты
+    // dataSource в тестовый контекст (вместо встроенной H2; схема создаётся Hibernate)
+    @Container
+    @ServiceConnection
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine");
 
     @Autowired
     private AccountRepository accountRepository;

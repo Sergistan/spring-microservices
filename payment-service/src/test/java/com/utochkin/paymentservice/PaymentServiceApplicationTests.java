@@ -22,7 +22,10 @@ import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.TestPropertySource;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -46,7 +49,6 @@ import java.math.BigDecimal;
 })
 @ActiveProfiles("test")
 @TestPropertySource(properties = {
-        "spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1",
         "spring.cloud.compatibility-verifier.enabled=false",
         "spring.liquibase.enabled=false",
         "eureka.client.enabled=false",
@@ -56,7 +58,14 @@ import java.math.BigDecimal;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @AutoConfigureMockMvc
 @WithMockUser(roles = "USER")
+@Testcontainers(disabledWithoutDocker = true)
 class PaymentServiceApplicationTests {
+
+    // Реальный PostgreSQL в docker-контейнере: @ServiceConnection подставляет реквизиты
+    // dataSource в тестовый контекст (вместо встроенной H2; схема создаётся Hibernate)
+    @Container
+    @ServiceConnection
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine");
 
     @Autowired
     private MockMvc mvc;

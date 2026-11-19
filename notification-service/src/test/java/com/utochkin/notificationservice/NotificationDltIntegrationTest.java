@@ -13,16 +13,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.test.EmbeddedKafkaBroker;
-import org.springframework.kafka.test.context.EmbeddedKafka;
-import org.springframework.kafka.test.utils.KafkaTestUtils;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.kafka.KafkaContainer;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -52,13 +53,14 @@ import static org.mockito.Mockito.verifyNoInteractions;
                 "spring.kafka.consumer.properties.spring.json.trusted.packages=*"
         }
 )
-@EmbeddedKafka(partitions = 1, topics = {"topic-orders", "topic-orders.DLT"})
+@Testcontainers(disabledWithoutDocker = true)
 @EnableAutoConfiguration(exclude = {SecurityAutoConfiguration.class})
 @ActiveProfiles("test")
 class NotificationDltIntegrationTest {
 
-    @Autowired
-    private EmbeddedKafkaBroker embeddedKafka;
+    @Container
+    @ServiceConnection
+    static KafkaContainer kafka = new KafkaContainer("apache/kafka:3.7.0");
 
     @MockitoBean
     private JavaMailSender mailSender;
@@ -69,19 +71,29 @@ class NotificationDltIntegrationTest {
     @Test
     @DisplayName("Битое (poison) сообщение уходит в topic-orders.DLT, письмо не отправляется, консьюмер жив")
     void poisonMessage_goesToDlq() {
-        Map<String, Object> producerProps = KafkaTestUtils.producerProps(embeddedKafka);
-        producerProps.put("key.serializer", StringSerializer.class);
-        producerProps.put("value.serializer", StringSerializer.class);
+        // 1) Публикуем сырую строку как poison-сообщение: JsonDeserializer не сможет её распарсить.
+        // Ожидаемая цепочка на стороне приложения: ErrorHandlingDeserializer -> DeserializationException
+        // -> DefaultErrorHandler (2 ретрая) -> DeadLetterPublishingRecoverer -> topic-orders.DLT
+        Map<String, Object> producerProps = Map.of(
+                org.apache.kafka.clients.producer.ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers(),
+                org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
+                org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class
+        );
         KafkaTemplate<String, String> rawProducer = new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(producerProps));
 
         rawProducer.send("topic-orders", "not-a-json-at-all");
         rawProducer.flush();
 
-        Map<String, Object> dltConsumerProps = KafkaTestUtils.consumerProps(
-                UUID.randomUUID().toString(), "true", embeddedKafka);
-        dltConsumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        dltConsumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        dltConsumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        // 2) Одноразовый консьюмер читает DLT-топик и проверяет заголовок исключения
+        // и наличие исходного poison-сообщения в теле записи
+        Map<String, Object> dltConsumerProps = Map.of(
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers(),
+                ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString(),
+                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
+                ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true",
+                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class,
+                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class
+        );
 
         try (org.apache.kafka.clients.consumer.Consumer<String, String> dltConsumer =
                      new DefaultKafkaConsumerFactory<String, String>(dltConsumerProps).createConsumer()) {

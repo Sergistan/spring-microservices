@@ -23,18 +23,21 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.MediaType;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.test.EmbeddedKafkaBroker;
-import org.springframework.kafka.test.context.EmbeddedKafka;
-import org.springframework.kafka.test.utils.KafkaTestUtils;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.kafka.KafkaContainer;
 
 import java.net.URLEncoder;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -60,30 +63,34 @@ import java.math.BigDecimal;
                 "spring.jpa.hibernate.ddl-auto=create-drop",
                 "spring.cloud.compatibility-verifier.enabled=false",
                 "spring.liquibase.enabled=false",
-                "spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1",
                 "spring.kafka.producer.key-serializer=org.apache.kafka.common.serialization.StringSerializer",
                 "spring.kafka.producer.value-serializer=org.springframework.kafka.support.serializer.JsonSerializer",
-                "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}",
                 "outbox.relay.fixed-delay=3600000"
         }
 )
 @ActiveProfiles("test")
 @AutoConfigureMockMvc
-@EmbeddedKafka(
-        partitions = 1,
-        topics = {"topic-orders"}
-)
+@Testcontainers(disabledWithoutDocker = true)
 @EnableAutoConfiguration(exclude = {CircuitBreakerAutoConfiguration.class, RetryAutoConfiguration.class})
 class OrderServiceIntegrationTest {
+
+    // Реальный PostgreSQL в docker-контейнере: @ServiceConnection подставляет реквизиты
+    // dataSource в тестовый контекст (вместо встроенной H2; схема создаётся Hibernate)
+    @Container
+    @ServiceConnection
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine");
+
+    // Реальный Kafka-брокер в контейнере (вместо EmbeddedKafka):
+    // @ServiceConnection отдаёт bootstrap-servers и продюсеру, и консьюмеру этого теста
+    @Container
+    @ServiceConnection
+    static KafkaContainer kafka = new KafkaContainer("apache/kafka:3.7.0");
 
     @Autowired
     private MockMvc mvc;
 
     @Autowired
     private ObjectMapper objectMapper;
-
-    @Autowired
-    private EmbeddedKafkaBroker embeddedKafka;
 
     @Autowired
     private KafkaTemplate<String, Object> kafkaTemplate;
@@ -104,11 +111,13 @@ class OrderServiceIntegrationTest {
     @MockitoBean
     private JwtDecoder jwtDecoder;
 
-    private UUID createOrder(double total) throws Exception {
+    // Хелпер: создаёт заказ через REST, подменяя ответы shop-сервиса моками
+    // (checkOrder=true, сумма заказа = total); возвращает orderUuid из ответа
+    private UUID createOrder(BigDecimal total) throws Exception {
         UUID articleId = UUID.fromString("00000000-0000-0000-0000-000000000003");
         List<OrderRequest> req = List.of(new OrderRequest(articleId, 3));
         given(shopController.checkOrder(req)).willReturn(true);
-        given(shopController.getSumTotalPriceOrder(req)).willReturn(BigDecimal.valueOf(total));
+        given(shopController.getSumTotalPriceOrder(req)).willReturn(total);
 
         CompositeRequest cr = new CompositeRequest(req, new AddressDto("City", "Street", 10, 101));
         String json = objectMapper.writeValueAsString(cr);
@@ -178,17 +187,22 @@ class OrderServiceIntegrationTest {
     private record KafkaEntry(String key, String value) {
     }
 
+    // Вычитываем все записи topic-orders одноразовым консьюмером (своя group + earliest),
+    // чтобы проверить события, опубликованные outbox-релеем после pay/refund
     private List<KafkaEntry> readAllFromTopic() {
-        Map<String, Object> consumerProps = KafkaTestUtils.consumerProps(
-                UUID.randomUUID().toString(), "false", embeddedKafka
+        Map<String, Object> consumerProps = Map.of(
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers(),
+                ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString(),
+                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
+                ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
+                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class,
+                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class
         );
-        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
 
         try (Consumer<String, String> consumer =
                      new DefaultKafkaConsumerFactory<String, String>(consumerProps).createConsumer()) {
-            embeddedKafka.consumeFromAnEmbeddedTopic(consumer, "topic-orders");
-            ConsumerRecords<String, String> records = KafkaTestUtils.getRecords(consumer);
+            consumer.subscribe(List.of("topic-orders"));
+            ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
             List<KafkaEntry> entries = new ArrayList<>();
             records.forEach(record -> entries.add(new KafkaEntry(record.key(), record.value())));
             return entries;
@@ -198,11 +212,11 @@ class OrderServiceIntegrationTest {
     @Test
     @DisplayName("Оплата заказа → 200 + SUCCESS; событие через outbox в Kafka с ключом orderUuid")
     void payOrder_andKafka() throws Exception {
-        double total = 250.5;
+        BigDecimal total = new BigDecimal("250.50");
         UUID orderUuid = createOrder(total);
 
         PaymentRequest payReq = new PaymentRequest(orderUuid, "1111 2222 3333 4444");
-        AccountRequest acct = new AccountRequest(orderUuid, BigDecimal.valueOf(total).setScale(2), payReq.getCardNumber());
+        AccountRequest acct = new AccountRequest(orderUuid, total.setScale(2), payReq.getCardNumber());
         UUID payId = UUID.randomUUID();
         given(paymentController.paymentOrder(acct))
                 .willReturn(new PaymentResponse(payId, Status.SUCCESS));
@@ -234,11 +248,11 @@ class OrderServiceIntegrationTest {
     @Test
     @DisplayName("Двойная оплата → вторая отклоняется с 400, повторного вызова payment нет")
     void payOrder_twice_secondRejected() throws Exception {
-        double total = 250.5;
+        BigDecimal total = new BigDecimal("250.50");
         UUID orderUuid = createOrder(total);
 
         PaymentRequest payReq = new PaymentRequest(orderUuid, "1111 2222 3333 4444");
-        AccountRequest acct = new AccountRequest(orderUuid, BigDecimal.valueOf(total).setScale(2), payReq.getCardNumber());
+        AccountRequest acct = new AccountRequest(orderUuid, total.setScale(2), payReq.getCardNumber());
         given(paymentController.paymentOrder(acct))
                 .willReturn(new PaymentResponse(UUID.randomUUID(), Status.SUCCESS));
 
@@ -330,11 +344,11 @@ class OrderServiceIntegrationTest {
     @Test
     @DisplayName("Отмена заказа → 200 + REFUNDED + Kafka‑сообщение")
     void refundedOrder_andKafka() throws Exception {
-        double total = 300.0;
+        BigDecimal total = new BigDecimal("300.00");
         UUID orderUuid = createOrder(total);
 
         PaymentRequest payReq = new PaymentRequest(orderUuid, "1111 2222 3333 4444");
-        AccountRequest acctPay = new AccountRequest(orderUuid, BigDecimal.valueOf(total).setScale(2), payReq.getCardNumber());
+        AccountRequest acctPay = new AccountRequest(orderUuid, total.setScale(2), payReq.getCardNumber());
         UUID payId = UUID.randomUUID();
         given(paymentController.paymentOrder(acctPay))
                 .willReturn(new PaymentResponse(payId, Status.SUCCESS));
@@ -348,7 +362,7 @@ class OrderServiceIntegrationTest {
                 .andExpect(jsonPath("$.status").value("SUCCESS"));
 
         PaymentRequest refundReq = new PaymentRequest(orderUuid, "9999 8888 7777 6666");
-        AccountRequest acctRefund = new AccountRequest(orderUuid, BigDecimal.valueOf(total).setScale(2), refundReq.getCardNumber());
+        AccountRequest acctRefund = new AccountRequest(orderUuid, total.setScale(2), refundReq.getCardNumber());
         UUID refundId = UUID.randomUUID();
         given(paymentController.refundedOrder(acctRefund))
                 .willReturn(new PaymentResponse(refundId, Status.REFUNDED));
@@ -374,7 +388,7 @@ class OrderServiceIntegrationTest {
     @Test
     @DisplayName("IDOR: чужой X-User-SubId не может оплатить заказ — 403, статус не меняется")
     void payOrder_foreignSubId_forbidden() throws Exception {
-        UUID orderUuid = createOrder(150.0);
+        UUID orderUuid = createOrder(new BigDecimal("150.00"));
 
         PaymentRequest payReq = new PaymentRequest(orderUuid, "1111 2222 3333 4444");
 

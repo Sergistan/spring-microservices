@@ -5,6 +5,8 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.kafka.KafkaConnectionDetails;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
@@ -26,8 +28,18 @@ public class KafkaErrorConfig {
     public static final String DLT_SUFFIX = ".DLT";
 
     @Bean
-    public DefaultErrorHandler kafkaErrorHandler(Environment environment) {
-        String bootstrapServers = environment.getProperty("spring.kafka.bootstrap-servers", "localhost:9092");
+    public DefaultErrorHandler kafkaErrorHandler(Environment environment,
+                                                 ObjectProvider<KafkaConnectionDetails> connectionDetails) {
+        // В тестах на Testcontainers адрес брокера приходит через KafkaConnectionDetails (@ServiceConnection),
+        // а не через свойство spring.kafka.bootstrap-servers — учитываем оба источника
+        KafkaConnectionDetails kafkaConnectionDetails = connectionDetails.getIfAvailable();
+        String bootstrapServers = kafkaConnectionDetails != null
+                ? String.join(",", kafkaConnectionDetails.getProducerBootstrapServers())
+                : environment.getProperty("spring.kafka.bootstrap-servers");
+        if (bootstrapServers == null) {
+            throw new IllegalStateException(
+                    "KafkaErrorConfig: не задан spring.kafka.bootstrap-servers и нет KafkaConnectionDetails — DLQ-продюсер создать нельзя");
+        }
 
         Map<String, Object> rawProps = new HashMap<>();
         rawProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);

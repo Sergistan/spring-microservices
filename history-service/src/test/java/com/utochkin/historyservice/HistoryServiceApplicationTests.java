@@ -13,11 +13,15 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.testcontainers.containers.MongoDBContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.kafka.KafkaContainer;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -32,8 +36,6 @@ import java.math.BigDecimal;
         classes = HistoryServiceApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.NONE,
         properties = {
-                "spring.data.mongodb.database=testdb",
-                "spring.mongodb.embedded.version=4.0.2",
                 "spring.kafka.consumer.auto-offset-reset=earliest",
                 "spring.kafka.listener.missing-topics-fatal=false",
                 "spring.kafka.listener.ack-mode=MANUAL_IMMEDIATE",
@@ -45,9 +47,19 @@ import java.math.BigDecimal;
                 "spring.kafka.consumer.properties.spring.json.trusted.packages=*"
         }
 )
-@EmbeddedKafka(partitions = 1, topics = "topic-orders")
+@Testcontainers(disabledWithoutDocker = true)
 @ActiveProfiles("test")
 public class HistoryServiceApplicationTests {
+
+    // Реальные MongoDB и Kafka в контейнерах: публикуем событие в topic-orders,
+    // слушатель приложения сохраняет историю в MongoDB (вместо встроенной flapdoodle-БД)
+    @Container
+    @ServiceConnection
+    static MongoDBContainer mongo = new MongoDBContainer("mongo:6.0.21");
+
+    @Container
+    @ServiceConnection
+    static KafkaContainer kafka = new KafkaContainer("apache/kafka:3.7.0");
 
     @Autowired
     private KafkaTemplate<String, OrderDtoForKafka> kafkaTemplate;

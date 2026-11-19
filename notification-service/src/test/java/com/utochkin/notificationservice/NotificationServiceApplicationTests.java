@@ -14,9 +14,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.test.EmbeddedKafkaBroker;
-import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.mail.SimpleMailMessage;
@@ -24,6 +23,9 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.kafka.KafkaContainer;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -56,13 +58,16 @@ import java.math.BigDecimal;
                 "spring.kafka.consumer.properties.spring.json.trusted.packages=*"
         }
 )
-@EmbeddedKafka(partitions = 1, topics = "topic-orders")
+@Testcontainers(disabledWithoutDocker = true)
 @EnableAutoConfiguration(exclude = {SecurityAutoConfiguration.class})
 @ActiveProfiles("test")
 class NotificationServiceApplicationTests {
 
-    @Autowired
-    private EmbeddedKafkaBroker embeddedKafka;
+    // Реальный Kafka-брокер в контейнере: приложение слушает topic-orders настоящим
+    // консьюмером (ErrorHandlingDeserializer + дедупликация), мы проверяем отправку письма
+    @Container
+    @ServiceConnection
+    static KafkaContainer kafka = new KafkaContainer("apache/kafka:3.7.0");
 
     @Autowired
     private KafkaTemplate<String, OrderDtoForKafka> kafkaTemplate;
@@ -80,6 +85,8 @@ class NotificationServiceApplicationTests {
     private JwtDecoder jwtDecoder;
 
 
+    // Redis сознательно НЕ поднимаем контейнером: StringRedisTemplate мокируется,
+    // чтобы детерминированно управлять дедупликацией (первая доставка / повтор)
     @BeforeEach
     void configureTemplate() {
         kafkaTemplate.setDefaultTopic("topic-orders");
