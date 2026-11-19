@@ -24,65 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-//@Component
-//@Slf4j
-//public class JwtTokenFilter implements GlobalFilter {
-//
-//    @Value("${jwt.public-key}")
-//    private String publicKey;
-//
-//    @SneakyThrows
-//    @Override
-//    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-//        String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
-//        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-//            String token = authHeader.substring(7);
-//            Claims claims = parseJwtToken(token); // Распарсить токен
-//
-//            // Извлекаем роли
-//            Map<String, Object> resourceAccess = claims.get("resource_access", Map.class);
-//            Map<String, Object> clientAccess = (Map<String, Object>) resourceAccess.get("spring-microservices");
-//            List<String> roles = (List<String>) clientAccess.get("roles");
-//
-//            String role = roles != null && !roles.isEmpty() ? roles.get(0) : "UNKNOWN";
-//
-//            exchange.getRequest().mutate()
-//                    .header("X-User-SubId", claims.get("sub").toString()) // ID пользователя
-//                    .header("X-User-UserName", claims.get("preferred_username").toString()) // Username пользователя
-//                    .header("X-User-FirstName", URLEncoder.encode(claims.get("given_name").toString(), StandardCharsets.UTF_8)) // Имя пользователя
-//                    .header("X-User-LastName", URLEncoder.encode(claims.get("family_name").toString(), StandardCharsets.UTF_8)) // Фамилия пользователя
-//                    .header("X-User-Email", claims.get("email").toString()) // Email пользователя
-//                    .header("X-User-Role", role) // Роль пользователя
-//                    .build();
-//        }
-//        return chain.filter(exchange);
-//    }
-//
-//    private Claims parseJwtToken(String token) throws Exception {
-//        PublicKey key = readRsaPublicKey(publicKey);
-//        return Jwts.parserBuilder()
-//                .setSigningKey(key)
-//                .build()
-//                .parseClaimsJws(token)
-//                .getBody();
-//    }
-//
-//    private static PublicKey readRsaPublicKey(String pemEncodedKey) throws Exception {
-//        // Удаляем заголовок и окончание, если они есть
-//        String publicKeyPEM = pemEncodedKey
-//                .replace("-----BEGIN PUBLIC KEY-----", "")
-//                .replace("-----END PUBLIC KEY-----", "")
-//                .replaceAll("\\s+", "");
-//
-//        byte[] decodedKey = Base64.getDecoder().decode(publicKeyPEM);
-//        X509EncodedKeySpec keySpec = new X509EncodedKeySpec(decodedKey);
-//
-//        KeyFactory keyFactory = KeyFactory.getInstance("RSA");
-//        return keyFactory.generatePublic(keySpec);
-//    }
-//}
-
-
 /**
  * Шлюзовый фильтр после проверки JWT (resource server): раскладывает claim'ы токена
  * в доверенные заголовки X-User-* (SubId/UserName/FirstName/LastName/Email/Role) и проксирует
@@ -103,12 +44,12 @@ public class JwtTokenFilter implements GlobalFilter, Ordered {
         return Ordered.LOWEST_PRECEDENCE - 10;
     }
 
-    @SneakyThrows
     /**
      * Есть Bearer -> распарсить (проверка подписи по RSA-ключу realm'а) и мутировать запрос,
      * перезаписав заголовки X-User-* значениями из claim'ов. Перезапись = внешний
      * спуфинг X-User-* невозможен: значение из запроса клиента заменяется нашим.
      */
+    @SneakyThrows
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);

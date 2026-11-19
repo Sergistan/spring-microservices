@@ -17,61 +17,6 @@ import reactor.core.publisher.Mono;
 
 import static org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers.pathMatchers;
 
-
-//@Configuration
-//@EnableWebFluxSecurity
-//public class ReactiveConfig {
-//
-//    @Bean
-//    public SecurityWebFilterChain springSecurityFilterChain(ServerHttpSecurity http) {
-//        http
-//                .csrf(ServerHttpSecurity.CsrfSpec::disable)
-//                .authorizeExchange(exchange -> exchange
-//                        .pathMatchers(
-//                                "/swagger-ui.html",
-//                                "/swagger-ui/**",
-//                                "/v3/api-docs/**",
-//                                "/order/v3/api-docs",
-//                                "/webjars/swagger-ui/**",
-//                                "/shop/v3/api-docs",
-//                                "/payment/v3/api-docs",
-//                                "/swagger-resources/**",
-//                                "/webjars/**",
-//                                "/favicon.ico"
-//                        ).permitAll()
-//                        .anyExchange().authenticated())
-//                .oauth2Client(Customizer.withDefaults())
-//                .securityContextRepository(NoOpServerSecurityContextRepository.getInstance())
-//                .oauth2ResourceServer(oauth2 -> oauth2
-//                        .jwt(jwt -> jwt
-//                                .jwtAuthenticationConverter(grantedAuthoritiesExtractor()) // Подключаем кастомный конвертер
-//                        ))
-//        ;
-//
-//        return http.build();
-//    }
-//
-//    private Converter<Jwt, Mono<AbstractAuthenticationToken>> grantedAuthoritiesExtractor() {
-//        JwtAuthenticationConverter jwtAuthenticationConverter = new JwtAuthenticationConverter();
-//        jwtAuthenticationConverter.setJwtGrantedAuthoritiesConverter(new AuthServerRoleConverter());
-//        return new ReactiveJwtAuthenticationConverterAdapter(jwtAuthenticationConverter);
-//    }
-//
-//    @Bean
-//    public CorsWebFilter corsFilter() {
-//        CorsConfiguration config = new CorsConfiguration();
-//        config.setAllowCredentials(true);
-//        config.addAllowedOrigin("*");
-//        config.addAllowedHeader("*");
-//        config.addAllowedMethod("*");
-//
-//        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-//        source.registerCorsConfiguration("/**", config);
-//
-//        return new CorsWebFilter(source);
-//    }
-//}
-
 /**
  * Две security-цепочки gateway (WebFlux):
  *  1) @Order(1) oauth2LoginChain — swagger-ui/docs и OAuth2-флоу входа по Keycloak;
