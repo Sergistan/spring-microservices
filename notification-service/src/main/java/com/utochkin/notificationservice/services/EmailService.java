@@ -30,7 +30,11 @@ public class EmailService {
             mailSender.send(message);
             log.info("EmailService: письмо успешно отправлено на {}", to);
         } catch (MailException exception) {
-            log.error("EmailService: не удалось отправить письмо на {}: {}", to, exception.getMessage(), exception);
+            // WARN без стектрейса: это промежуточный сбой — Kafka-ретраи повторят отправку,
+            // и в подавляющем большинстве случаев письмо уходит со следующей попытки.
+            // Финальная неудача (все ретраи исчерпаны) логируется ERROR в KafkaErrorConfig при переносе в DLT.
+            log.warn("EmailService: не удалось отправить письмо на {} ({}), будет повторено ретраем",
+                    to, exception.getMostSpecificCause().toString());
             throw exception;
         }
     }
