@@ -2,6 +2,7 @@ package com.utochkin.orderservice.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+/** Пользователь-владелец заказа (в ответе создания и в Kafka-событиях). */
 public record UserDto(
         @Schema(description = "Имя пользователя", example = "sergistan")
         String username,

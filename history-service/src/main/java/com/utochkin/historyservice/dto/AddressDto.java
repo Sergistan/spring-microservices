@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Positive;
 
 
+/** Адрес доставки заказа из события. */
 public record AddressDto(
         @NotEmpty String city,
         @NotEmpty String street,

@@ -89,7 +89,8 @@ public class HistoryServiceApplicationTests {
                 new UserDto("alice", "Alice", "White", "alice@example.com"),
                 List.of(new OrderRequest(UUID.randomUUID(), 3)),
                 UUID.randomUUID(),
-                UUID.randomUUID()
+                UUID.randomUUID(),
+                null
         );
 
         kafkaTemplate.sendDefault(orderDto);
@@ -116,7 +117,8 @@ public class HistoryServiceApplicationTests {
                 new UserDto("bob", "Bob", "Grey", "bob@example.com"),
                 List.of(new OrderRequest(UUID.randomUUID(), 3)),
                 UUID.randomUUID(),
-                eventId
+                eventId,
+                null
         );
 
         kafkaTemplate.sendDefault(orderDto);

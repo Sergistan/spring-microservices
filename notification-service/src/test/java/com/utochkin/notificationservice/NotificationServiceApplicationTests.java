@@ -109,7 +109,8 @@ class NotificationServiceApplicationTests {
                 new UserDto("alice", "Alice", "Smith", "alice@example.com"),
                 List.of(new OrderRequest(UUID.randomUUID(), 1)),
                 UUID.randomUUID(),
-                UUID.randomUUID()
+                UUID.randomUUID(),
+                null
         );
 
         kafkaTemplate.sendDefault(order);
@@ -141,7 +142,8 @@ class NotificationServiceApplicationTests {
                 new UserDto("alice", "Alice", "Smith", "alice@example.com"),
                 List.of(new OrderRequest(UUID.randomUUID(), 1)),
                 UUID.randomUUID(),
-                UUID.randomUUID()
+                UUID.randomUUID(),
+                null
         );
 
         kafkaTemplate.sendDefault(order);

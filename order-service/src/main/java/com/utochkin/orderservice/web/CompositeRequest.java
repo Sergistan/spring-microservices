@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+/** Тело POST /orders: список позиций + адрес доставки. */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor

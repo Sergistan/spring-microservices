@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.util.UUID;
+/** DTO товара каталога для GET-ответов (кэшируется в Redis). */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor

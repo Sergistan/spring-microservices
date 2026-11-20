@@ -6,6 +6,10 @@ import lombok.*;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * Запись transactional outbox: событие фиксируется в транзакции бизнес-операции,
+ * OutboxRelay публикует его в topic-orders (FOR UPDATE SKIP LOCKED) и удаляет.
+ */
 @NoArgsConstructor
 @AllArgsConstructor
 @Setter

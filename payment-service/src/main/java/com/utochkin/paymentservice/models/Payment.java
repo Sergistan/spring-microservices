@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/** Платёж/возврат: UNIQUE(order_uuid, type) — ключ идемпотентности против двойного списания/возврата. */
 @NoArgsConstructor
 @AllArgsConstructor
 @Setter

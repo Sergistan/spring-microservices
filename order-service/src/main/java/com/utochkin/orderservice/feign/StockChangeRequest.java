@@ -8,6 +8,10 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Тело команды изменения остатков в shop-service (Feign): orderUuid — ключ идемпотентности
+ * (маркер stock_operations), orderRequests — позиции списания/восстановления.
+ */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor

@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.util.UUID;
 
+/** Позиция заказа во внутренних командах order-service (проверка остатков/списание/восстановление). */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor

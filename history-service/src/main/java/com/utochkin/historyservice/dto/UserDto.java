@@ -3,6 +3,7 @@ package com.utochkin.historyservice.dto;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotEmpty;
 
+/** Пользователь-владелец заказа из события (username — ключ документа истории). */
 public record UserDto(@NotEmpty String username,
                       @NotEmpty String firstName,
                       @NotEmpty String lastName,

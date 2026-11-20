@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 
 import java.util.UUID;
 
+/** Ответ платежа/возврата от payment-service: paymentId + итоговый статус. */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor

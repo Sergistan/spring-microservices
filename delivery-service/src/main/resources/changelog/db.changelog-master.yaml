@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - include:
+      file: /tables/couriers.sql
+      relativeToChangeLogFile: true
+  - include:
+      file: /tables/deliveries.sql
+      relativeToChangeLogFile: true
+  - include:
+      file: /tables/processed_events.sql
+      relativeToChangeLogFile: true

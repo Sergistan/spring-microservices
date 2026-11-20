@@ -66,7 +66,8 @@ class OrderHistoryServiceTest {
                 new UserDto("john", "John", "Doe", "john@example.com"),
                 List.of(new com.utochkin.historyservice.dto.OrderRequest(UUID.randomUUID(), 2)),
                 UUID.randomUUID(),
-                UUID.randomUUID()
+                UUID.randomUUID(),
+                null
         );
     }
 

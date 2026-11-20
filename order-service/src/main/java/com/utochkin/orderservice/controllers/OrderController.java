@@ -1,15 +1,19 @@
 package com.utochkin.orderservice.controllers;
 
+import com.utochkin.orderservice.dto.DeliveryStatusResponse;
 import com.utochkin.orderservice.dto.OrderDto;
 import com.utochkin.orderservice.dto.OrderDtoForKafka;
 import com.utochkin.orderservice.dto.ErrorResponse;
+import com.utochkin.orderservice.exceptions.OrderAccessDeniedException;
 import com.utochkin.orderservice.models.User;
 import com.utochkin.orderservice.web.CardRequest;
 import com.utochkin.orderservice.web.CompositeRequest;
+import com.utochkin.orderservice.web.CourierRequest;
 import com.utochkin.orderservice.web.PaymentRequest;
 import com.utochkin.orderservice.feign.PaymentResponse;
 import com.utochkin.orderservice.services.OrderService;
 import com.utochkin.orderservice.services.UserService;
+import io.swagger.v3.oas.annotations.Hidden;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -21,8 +25,10 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URLDecoder;
@@ -39,6 +45,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/order/api/v1")
 @RequiredArgsConstructor
+@Log4j2
 @Tag(name = "Order endpoints", description = "Order API")
 public class OrderController {
 
@@ -129,4 +136,59 @@ public class OrderController {
         return new ResponseEntity<>("Заказ успешно отменен", HttpStatus.OK);
     }
 
+    /**
+     * POST /orders/{orderUuid}/deliveries — внутренний эндпоинт delivery-service (T+5 минут
+     * после оплаты): CAS-перевод SUCCESS -> DELIVERING + событие в outbox (в событие попадает
+     * ФИО курьера из тела запроса — для письма покупателю). 409 = заказ уже не SUCCESS
+     * (успел возврат) — доставка обязана отмениться и освободить курьера.
+     * Доступен только сервисному токену клиента delivery-service-client (проверка claim azp).
+     */
+    @Hidden
+    @PostMapping("/orders/{orderUuid}/deliveries")
+    public ResponseEntity<DeliveryStatusResponse> startDelivery(@Parameter(hidden = true) @PathVariable UUID orderUuid,
+                                                                @Parameter(hidden = true) @RequestBody @Valid CourierRequest courierRequest,
+                                                                @Parameter(hidden = true) JwtAuthenticationToken authentication) {
+        requireServiceClient(authentication, "delivery-service-client");
+        return new ResponseEntity<>(orderService.markOrderDelivering(orderUuid, courierRequest.courierName()), HttpStatus.OK);
+    }
+
+    /**
+     * PATCH /orders/{orderUuid}/deliveries — внутренний эндпоинт delivery-service по завершении
+     * доставки: CAS-перевод DELIVERING -> DELIVERED + событие в outbox. После DELIVERED возврат
+     * невозможен. Доступен только delivery-service-client (claim azp).
+     */
+    @Hidden
+    @PatchMapping("/orders/{orderUuid}/deliveries")
+    public ResponseEntity<DeliveryStatusResponse> completeDelivery(@Parameter(hidden = true) @PathVariable UUID orderUuid,
+                                                                   @Parameter(hidden = true) JwtAuthenticationToken authentication) {
+        requireServiceClient(authentication, "delivery-service-client");
+        return new ResponseEntity<>(orderService.markOrderDelivered(orderUuid), HttpStatus.OK);
+    }
+
+    /**
+     * GET /users/{subId}/has-active-orders — внутренний эндпоинт auth-service перед удалением
+     * аккаунта: есть ли заказы не в финальных статусах (активной считается и доставка).
+     * Доступен только сервисному токену auth-service-client (claim azp).
+     */
+    @Hidden
+    @GetMapping("/users/{subId}/has-active-orders")
+    public ResponseEntity<Boolean> hasActiveOrders(@Parameter(hidden = true) @PathVariable String subId,
+                                                   @Parameter(hidden = true) JwtAuthenticationToken authentication) {
+        requireServiceClient(authentication, "auth-service-client");
+        return new ResponseEntity<>(orderService.hasActiveOrders(subId), HttpStatus.OK);
+    }
+
+    /**
+     * Service-to-service авторизация: claim azp (authorized party) в access-токене показывает,
+     * какому клиенту Keycloak выдан токен. Разрешаем только ожидаемому сервисному клиенту —
+     * обычный пользователь (azp=spring-microservices) эти эндпоинты вызвать не может.
+     */
+    private void requireServiceClient(JwtAuthenticationToken authentication, String expectedClientId) {
+        String azp = authentication != null && authentication.getToken() != null
+                ? authentication.getToken().getClaimAsString("azp") : null;
+        if (!expectedClientId.equals(azp)) {
+            log.warn("OrderController: доступ к внутреннему эндпоинту отклонён, azp={}", azp);
+            throw new OrderAccessDeniedException("Ошибка: доступ разрешён только внутренним сервисам");
+        }
+    }
 }

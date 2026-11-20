@@ -20,7 +20,8 @@ pipeline {
           def services = [
             'eureka-server','config-server','getaway-server',
             'order-service','shop-service','payment-service',
-            'notification-service','history-service'
+            'notification-service','history-service',
+            'auth-service','delivery-service'
           ]
           services.each { svc ->
             powershell """
@@ -40,7 +41,8 @@ pipeline {
           def services = [
             'eureka-server','config-server','getaway-server',
             'order-service','shop-service','payment-service',
-            'notification-service','history-service'
+            'notification-service','history-service',
+            'auth-service','delivery-service'
           ]
           services.each { svc ->
             powershell """
@@ -59,7 +61,8 @@ pipeline {
             def services = [
               'eureka-server','config-server','getaway-server',
               'order-service','shop-service','payment-service',
-              'notification-service','history-service'
+              'notification-service','history-service',
+              'auth-service','delivery-service'
             ]
             services.each { svc ->
               powershell "docker push ${DOCKERHUB_REPO}:${svc}-${env.BUILD_NUMBER}"

@@ -8,6 +8,7 @@ import lombok.*;
 
 import java.io.Serializable;
 
+/** Адрес доставки (1:1 с заказом, каскадное сохранение вместе с ним). */
 @NoArgsConstructor
 @AllArgsConstructor
 @Setter

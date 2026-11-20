@@ -11,12 +11,21 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
 
+/**
+ * Security-конфигурация notification-service: это чистый Kafka-консьюмер без пользовательских
+ * REST-эндпоинтов, поэтому публично открыты только health/prometheus (healthcheck Docker и
+ * сбор метрик Prometheus); всё остальное требует валидный JWT (Keycloak, issuer из config-repo).
+ */
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
 public class Config {
 
 
+    /**
+     * Цепочка фильтров: stateless (без сессий), всё — с валидным JWT,
+     * публично только actuator-эндпоинты (health/prometheus).
+     */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 

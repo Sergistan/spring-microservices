@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.util.UUID;
 
+/** Ответ платежа/возврата: paymentId + статус (SUCCESS/FAILED/REFUNDED). */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor

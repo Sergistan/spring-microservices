@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+/** Ответ создания заказа (201): ключевые поля без позиционных подробностей Kafka-события. */
 @Schema(description = "Созданный заказ")
 public record OrderDto(
         @Schema(description = "UUID заказа", example = "3f9edc4b-e4cf-4257-a485-72a147a0b45f", type = "string", format = "uuid")
@@ -18,7 +19,7 @@ public record OrderDto(
         @Schema(description = "Общая стоимость заказа", example = "1000.00", type = "number")
         BigDecimal totalAmount,
 
-        @Schema(description = "Статус заказа", example = "SUCCESS", allowableValues = {"WAITING_FOR_PAYMENT", "SUCCESS", "FAILED", "REFUNDED"})
+        @Schema(description = "Статус заказа", example = "SUCCESS", allowableValues = {"WAITING_FOR_PAYMENT", "SUCCESS", "FAILED", "REFUNDED", "DELIVERING", "DELIVERED"})
         Status orderStatus,
 
         @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm")

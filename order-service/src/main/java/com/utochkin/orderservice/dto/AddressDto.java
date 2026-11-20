@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/** Адрес доставки заказа: приходит в POST /orders и переезжает в Kafka-события/письма. */
 @Schema(description = "Адрес доставки заказа")
 @AllArgsConstructor
 @NoArgsConstructor

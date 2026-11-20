@@ -9,6 +9,7 @@ import java.io.Serializable;
 import java.util.LinkedList;
 import java.util.List;
 
+/** Локальное зеркало пользователя Keycloak (subId/username/ФИО/email из заголовков X-User-* гейтвея). */
 @NoArgsConstructor
 @AllArgsConstructor
 @Setter

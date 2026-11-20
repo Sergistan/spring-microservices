@@ -3,9 +3,11 @@ package com.utochkin.orderservice.services;
 import com.utochkin.orderservice.controllers.PaymentController;
 import com.utochkin.orderservice.controllers.ShopController;
 import com.utochkin.orderservice.dto.AddressDto;
+import com.utochkin.orderservice.dto.DeliveryStatusResponse;
 import com.utochkin.orderservice.dto.OrderDto;
 import com.utochkin.orderservice.dto.OrderDtoForKafka;
 import com.utochkin.orderservice.dto.UserDto;
+import com.utochkin.orderservice.exceptions.DeliveryConflictException;
 import com.utochkin.orderservice.exceptions.FailedOrderStatusException;
 import com.utochkin.orderservice.exceptions.FailedPayOrderException;
 import com.utochkin.orderservice.exceptions.OrderAccessDeniedException;
@@ -143,7 +145,7 @@ public class OrderServiceTest {
                         uuid, BigDecimal.valueOf(100.0), Status.REFUNDED,
                         order.getCreatedAt(), LocalDateTime.now(),
                         addrDto, new UserDto("bob", "", "", ""),
-                        orderRequests, UUID.randomUUID(), UUID.randomUUID()
+                        orderRequests, UUID.randomUUID(), UUID.randomUUID(), null
                 ));
 
         given(transactionTemplate.execute(any()))
@@ -304,7 +306,7 @@ public class OrderServiceTest {
                 .willReturn(new OrderDtoForKafka(
                         uuid, BigDecimal.valueOf(100.0), Status.SUCCESS,
                         order.getCreatedAt(), LocalDateTime.now(),
-                        addrDto, new UserDto("bob", "", "", ""), orderRequests, success.getPaymentId(), UUID.randomUUID()
+                        addrDto, new UserDto("bob", "", "", ""), orderRequests, success.getPaymentId(), UUID.randomUUID(), null
                 ));
 
         PaymentResponse resp = orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"), "owner-sub");
@@ -329,7 +331,7 @@ public class OrderServiceTest {
                 .willReturn(new OrderDtoForKafka(
                         uuid, BigDecimal.valueOf(100.0), Status.FAILED,
                         order.getCreatedAt(), LocalDateTime.now(),
-                        addrDto, new UserDto("bob", "", "", ""), orderRequests, failed.getPaymentId(), UUID.randomUUID()
+                        addrDto, new UserDto("bob", "", "", ""), orderRequests, failed.getPaymentId(), UUID.randomUUID(), null
                 ));
 
         assertThrows(FailedPayOrderException.class, () ->
@@ -370,7 +372,7 @@ public class OrderServiceTest {
                 .willReturn(new OrderDtoForKafka(
                         uuid, BigDecimal.valueOf(100.0), Status.SUCCESS,
                         order.getCreatedAt(), LocalDateTime.now(),
-                        addrDto, new UserDto("bob", "", "", ""), orderRequests, success.getPaymentId(), UUID.randomUUID()
+                        addrDto, new UserDto("bob", "", "", ""), orderRequests, success.getPaymentId(), UUID.randomUUID(), null
                 ));
 
         PaymentResponse resp = orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"), "owner-sub");
@@ -643,5 +645,106 @@ public class OrderServiceTest {
 
         then(paymentController).should(never()).refundedOrder(any());
         then(shopController).should(never()).changeTotalQuantityProductsAfterRefundedOrder(any(StockChangeRequest.class));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = Status.class, names = {"DELIVERING", "DELIVERED"})
+    @DisplayName("refundedOrder: заказ в доставке/доставлен → отказ, refund не вызывается")
+    void refundedOrder_delivering_or_delivered_rejected(Status status) {
+        order.setOrderStatus(status);
+
+        FailedOrderStatusException ex = assertThrows(
+                FailedOrderStatusException.class,
+                () -> orderService.refundedOrder(new PaymentRequest(uuid, "5078 6038 0721 8893"), "owner-sub")
+        );
+        assertThat(ex.getMessage()).contains("возврат невозможен");
+
+        then(paymentController).should(never()).refundedOrder(any());
+        then(orderRepository).should(never()).transitionStatus(any(), anyList(), any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = Status.class, names = {"DELIVERING", "DELIVERED"})
+    @DisplayName("paymentOrder: заказ в доставке/доставлен → «уже оплачен», payment не вызывается")
+    void paymentOrder_delivering_or_delivered_rejected(Status status) {
+        order.setOrderStatus(status);
+
+        FailedOrderStatusException ex = assertThrows(
+                FailedOrderStatusException.class,
+                () -> orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"), "owner-sub")
+        );
+        assertThat(ex.getMessage()).isEqualTo("Заказ уже оплачен!");
+
+        then(paymentController).should(never()).paymentOrder(any());
+        then(orderRepository).should(never()).transitionStatus(any(), anyList(), any());
+    }
+
+    @Test
+    @DisplayName("markOrderDelivering: CAS из SUCCESS = 1 → DELIVERING + событие в outbox")
+    void markOrderDelivering_success() {
+        order.setOrderStatus(Status.SUCCESS);
+        given(orderRepository.transitionStatus(uuid, List.of(Status.SUCCESS), Status.DELIVERING)).willReturn(1);
+
+        DeliveryStatusResponse response = orderService.markOrderDelivering(uuid, "Ivan Kurierov");
+
+        assertThat(response.orderUuid()).isEqualTo(uuid);
+        assertThat(response.orderStatus()).isEqualTo(Status.DELIVERING);
+        then(outboxService).should().saveToOutbox(any(OrderDtoForKafka.class));
+    }
+
+    @Test
+    @DisplayName("markOrderDelivering: CAS = 0 и заказ REFUNDED → 409 DeliveryConflictException (возврат успел раньше)")
+    void markOrderDelivering_conflictAfterRefund() {
+        order.setOrderStatus(Status.REFUNDED);
+        given(orderRepository.transitionStatus(uuid, List.of(Status.SUCCESS), Status.DELIVERING)).willReturn(0);
+
+        assertThrows(DeliveryConflictException.class, () -> orderService.markOrderDelivering(uuid, "Ivan Kurierov"));
+        then(outboxService).should(never()).saveToOutbox(any());
+    }
+
+    @Test
+    @DisplayName("markOrderDelivering: повторный вызов при DELIVERING → идемпотентный 200 без второго события")
+    void markOrderDelivering_idempotentRepeat() {
+        order.setOrderStatus(Status.DELIVERING);
+        given(orderRepository.transitionStatus(uuid, List.of(Status.SUCCESS), Status.DELIVERING)).willReturn(0);
+
+        DeliveryStatusResponse response = orderService.markOrderDelivering(uuid, "Ivan Kurierov");
+
+        assertThat(response.orderStatus()).isEqualTo(Status.DELIVERING);
+        then(outboxService).should(never()).saveToOutbox(any());
+    }
+
+    @Test
+    @DisplayName("markOrderDelivered: CAS из DELIVERING = 1 → DELIVERED + событие в outbox")
+    void markOrderDelivered_success() {
+        order.setOrderStatus(Status.DELIVERING);
+        given(orderRepository.transitionStatus(uuid, List.of(Status.DELIVERING), Status.DELIVERED)).willReturn(1);
+
+        DeliveryStatusResponse response = orderService.markOrderDelivered(uuid);
+
+        assertThat(response.orderStatus()).isEqualTo(Status.DELIVERED);
+        then(outboxService).should().saveToOutbox(any(OrderDtoForKafka.class));
+    }
+
+    @Test
+    @DisplayName("markOrderDelivered: повторный вызов при DELIVERED → идемпотентный 200")
+    void markOrderDelivered_idempotentRepeat() {
+        order.setOrderStatus(Status.DELIVERED);
+        given(orderRepository.transitionStatus(uuid, List.of(Status.DELIVERING), Status.DELIVERED)).willReturn(0);
+
+        DeliveryStatusResponse response = orderService.markOrderDelivered(uuid);
+
+        assertThat(response.orderStatus()).isEqualTo(Status.DELIVERED);
+        then(outboxService).should(never()).saveToOutbox(any());
+    }
+
+    @Test
+    @DisplayName("hasActiveOrders: делегирует в репозиторий (активные = не FAILED/REFUNDED/DELIVERED)")
+    void hasActiveOrders_delegates() {
+        given(orderRepository.existsByUser_SubIdAndOrderStatusNotIn("sub-1", List.of(Status.FAILED, Status.REFUNDED, Status.DELIVERED)))
+                .willReturn(true);
+
+        assertThat(orderService.hasActiveOrders("sub-1")).isTrue();
+        then(orderRepository).should().existsByUser_SubIdAndOrderStatusNotIn("sub-1", List.of(Status.FAILED, Status.REFUNDED, Status.DELIVERED));
     }
 }

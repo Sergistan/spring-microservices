@@ -11,6 +11,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 import java.io.Serializable;
 import java.util.List;
 
+/** Документ истории пользователя: username (_id) + массив событий заказа ( в OrderHistoryService). */
 @Document(collection = "orderHistory")
 @AllArgsConstructor
 @NoArgsConstructor

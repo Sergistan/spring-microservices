@@ -1,7 +1,9 @@
 package com.utochkin.orderservice.repositories;
 
 import com.utochkin.orderservice.models.Order;
+import com.utochkin.orderservice.models.Role;
 import com.utochkin.orderservice.models.Status;
+import com.utochkin.orderservice.models.User;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -179,6 +181,38 @@ public class OrderRepositoryTest {
         int updated = orderRepo.transitionStatus(UUID.randomUUID(),
                 List.of(Status.WAITING_FOR_PAYMENT), Status.PROCESSING);
         assertThat(updated).isZero();
+    }
+
+    @Test
+    @DisplayName("existsByUser_SubIdAndOrderStatusNotIn: SUCCESS — активный, только финальные — не активный")
+    void existsByUser_SubIdAndOrderStatusNotIn_activeVsFinal() {
+        User activeUser = User.builder()
+                .subId("sub-active").username("active_user")
+                .firstName("A").lastName("A").email("a@a.com").role(Role.USER).build();
+        User doneUser = User.builder()
+                .subId("sub-done").username("done_user")
+                .firstName("D").lastName("D").email("d@d.com").role(Role.USER).build();
+        em.persist(activeUser);
+        em.persist(doneUser);
+
+        orderRepo.save(Order.builder()
+                .orderUuid(UUID.randomUUID()).totalAmount(BigDecimal.valueOf(100.0))
+                .orderStatus(Status.SUCCESS).createdAt(LocalDateTime.now()).user(activeUser).build());
+        orderRepo.save(Order.builder()
+                .orderUuid(UUID.randomUUID()).totalAmount(BigDecimal.valueOf(200.0))
+                .orderStatus(Status.DELIVERED).createdAt(LocalDateTime.now()).user(activeUser).build());
+        orderRepo.save(Order.builder()
+                .orderUuid(UUID.randomUUID()).totalAmount(BigDecimal.valueOf(300.0))
+                .orderStatus(Status.REFUNDED).createdAt(LocalDateTime.now()).user(doneUser).build());
+        orderRepo.flush();
+
+        List<Status> finalStatuses = List.of(Status.FAILED, Status.REFUNDED, Status.DELIVERED);
+
+        // у activeUser есть SUCCESS (доставка предстоит) -> аккаунт удалять нельзя
+        assertThat(orderRepo.existsByUser_SubIdAndOrderStatusNotIn("sub-active", finalStatuses)).isTrue();
+        // у doneUser только финальные статусы -> аккаунт можно удалять
+        assertThat(orderRepo.existsByUser_SubIdAndOrderStatusNotIn("sub-done", finalStatuses)).isFalse();
+        assertThat(orderRepo.existsByUser_SubIdAndOrderStatusNotIn("sub-unknown", finalStatuses)).isFalse();
     }
 
 }

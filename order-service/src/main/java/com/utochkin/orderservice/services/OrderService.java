@@ -4,6 +4,7 @@ package com.utochkin.orderservice.services;
 import com.utochkin.orderservice.controllers.PaymentController;
 import com.utochkin.orderservice.controllers.ShopController;
 import com.utochkin.orderservice.dto.AddressDto;
+import com.utochkin.orderservice.dto.DeliveryStatusResponse;
 import com.utochkin.orderservice.dto.OrderDto;
 import com.utochkin.orderservice.dto.OrderDtoForKafka;
 import com.utochkin.orderservice.exceptions.*;
@@ -65,6 +66,8 @@ public class OrderService {
 
     private static final List<Status> PAYABLE_STATUSES = List.of(Status.WAITING_FOR_PAYMENT, Status.FAILED, Status.PROCESSING);
     private static final List<Status> REFUNDABLE_STATUSES = List.of(Status.SUCCESS);
+    /** Статусы, после которых заказ завершён окончательно: ни оплаты, ни возврата, ни доставки уже не будет. */
+    private static final List<Status> FINAL_STATUSES = List.of(Status.FAILED, Status.REFUNDED, Status.DELIVERED);
 
     private final ShopController shopController;
     private final PaymentController paymentController;
@@ -223,7 +226,7 @@ public class OrderService {
         }
 
         switch (order.getOrderStatus()) {
-            case SUCCESS -> throw new FailedOrderStatusException("Заказ уже оплачен!");
+            case SUCCESS, DELIVERING, DELIVERED -> throw new FailedOrderStatusException("Заказ уже оплачен!");
             case REFUNDED -> throw new FailedOrderStatusException("Заказ отменен, необходимо создать новый заказ!");
             case STOCK_PENDING -> throw new FailedOrderStatusException("Заказ ещё подтверждается, попробуйте позже");
         }
@@ -277,6 +280,8 @@ public class OrderService {
         switch (order.getOrderStatus()) {
             case STOCK_PENDING, WAITING_FOR_PAYMENT, PROCESSING, FAILED, REFUNDED ->
                     throw new FailedOrderStatusException("Заказ нельзя отменить, т.к. он не был оплачен!");
+            case DELIVERING, DELIVERED ->
+                    throw new FailedOrderStatusException("Заказ уже передан в доставку или доставлен — возврат невозможен!");
         }
 
         Integer acquired = transactionTemplate.execute(status ->
@@ -340,6 +345,81 @@ public class OrderService {
         extractedFullbackMethod(paymentRequest, throwable);
         log.error("Fallback для refundedOrder сработал из-за: {}", throwable.getMessage());
         throw new ServiceUnavailableException("Сервис временно недоступен, пожалуйста, повторите попытку позже");
+    }
+
+    /**
+     * Перевод оплаченного заказа в DELIVERING — внутренний вызов delivery-service
+     * (сервисный токен, проверка azp в контроллере) через 5 минут после оплаты;
+     * courierName — ФИО назначенного курьера, попадает в событие DELIVERING (письмо покупателю).
+     * CAS из SUCCESS: гонку с возвратом решает владелец статуса (order-service) —
+     * 0 строк означает, что конкурент (refundedOrder) уже увёл заказ из SUCCESS.
+     * Повтор при DELIVERING/DELIVERED идемпотентен (200 без второго события),
+     * прочие статусы — 409 (доставка обязана отменить свою сторону и освободить курьера).
+     * Событие DELIVERING фиксируется в outbox в одной транзакции с переводом.
+     */
+    public DeliveryStatusResponse markOrderDelivering(UUID orderUuid, String courierName) {
+        orderRepository.findByOrderUuid(orderUuid).orElseThrow(OrderNotFoundException::new);
+        Boolean applied = transactionTemplate.execute(txStatus -> {
+            Integer updated = orderRepository.transitionStatus(orderUuid, List.of(Status.SUCCESS), Status.DELIVERING);
+            if (updated != null && updated > 0) {
+                Order fresh = orderRepository.findByOrderUuid(orderUuid).orElseThrow(OrderNotFoundException::new);
+                OrderDtoForKafka dto = toKafkaDto(fresh);
+                dto.setCourierName(courierName);
+                outboxService.saveToOutbox(dto);
+                return true;
+            }
+            return false;
+        });
+        if (Boolean.TRUE.equals(applied)) {
+            log.info("OrderService: заказ {} передан в доставку (DELIVERING), событие зафиксировано в outbox", orderUuid);
+            return new DeliveryStatusResponse(orderUuid, Status.DELIVERING);
+        }
+        return resolveDeliveryTransition(orderUuid, Status.DELIVERING, Status.DELIVERED);
+    }
+
+    /**
+     * Фиксация вручения заказа покупателю — внутренний вызов delivery-service
+     * по завершении доставки. CAS из DELIVERING; повтор при DELIVERED идемпотентен,
+     * прочие статусы — 409. Событие DELIVERED — через outbox (письмо «доставлен»).
+     */
+    public DeliveryStatusResponse markOrderDelivered(UUID orderUuid) {
+        orderRepository.findByOrderUuid(orderUuid).orElseThrow(OrderNotFoundException::new);
+        Boolean applied = transactionTemplate.execute(txStatus -> {
+            Integer updated = orderRepository.transitionStatus(orderUuid, List.of(Status.DELIVERING), Status.DELIVERED);
+            if (updated != null && updated > 0) {
+                Order fresh = orderRepository.findByOrderUuid(orderUuid).orElseThrow(OrderNotFoundException::new);
+                outboxService.saveToOutbox(toKafkaDto(fresh));
+                return true;
+            }
+            return false;
+        });
+        if (Boolean.TRUE.equals(applied)) {
+            log.info("OrderService: заказ {} доставлен покупателю (DELIVERED), событие зафиксировано в outbox", orderUuid);
+            return new DeliveryStatusResponse(orderUuid, Status.DELIVERED);
+        }
+        return resolveDeliveryTransition(orderUuid, Status.DELIVERED);
+    }
+
+    /** Разбор CAS=0 для доставки: идемпотентный повтор (уже в целевом статусе) или 409-конфликт. */
+    private DeliveryStatusResponse resolveDeliveryTransition(UUID orderUuid, Status... alreadyAppliedStatuses) {
+        Status current = orderRepository.findByOrderUuid(orderUuid).orElseThrow(OrderNotFoundException::new).getOrderStatus();
+        for (Status applied : alreadyAppliedStatuses) {
+            if (current == applied) {
+                log.info("OrderService: заказ {} уже в статусе {} — идемпотентный повтор доставки", orderUuid, current);
+                return new DeliveryStatusResponse(orderUuid, current);
+            }
+        }
+        throw new DeliveryConflictException(current);
+    }
+
+    /**
+     * Есть ли у пользователя незавершённые заказы (не FAILED/REFUNDED/DELIVERED) —
+     * внутренний вызов auth-service при удалении аккаунта: активные заказы
+     * (включая SUCCESS — после оплаты предстоит доставка) запрещают удаление.
+     */
+    @Transactional(readOnly = true)
+    public boolean hasActiveOrders(String subId) {
+        return orderRepository.existsByUser_SubIdAndOrderStatusNotIn(subId, FINAL_STATUSES);
     }
 
     /**

@@ -45,7 +45,8 @@ public class OrderHistoryRepositoryTest {
                 new UserDto(username, "Alice", "Smith", "alice@example.com"),
                 List.of(new OrderRequest(UUID.randomUUID(), 2)),
                 UUID.randomUUID(),
-                UUID.randomUUID()
+                UUID.randomUUID(),
+                null
         );
 
         OrderHistory history = new OrderHistory(username, List.of(orderDto));
@@ -84,7 +85,8 @@ public class OrderHistoryRepositoryTest {
                 new UserDto(username, "Alice", "Smith", "alice@example.com"),
                 List.of(new OrderRequest(UUID.randomUUID(), 1)),
                 UUID.randomUUID(),
-                UUID.randomUUID()
+                UUID.randomUUID(),
+                null
         );
 
         OrderHistory history = repository.findByUsername(username).orElseThrow();
