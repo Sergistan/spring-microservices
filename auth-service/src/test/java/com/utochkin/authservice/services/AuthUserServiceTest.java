@@ -40,6 +40,9 @@ public class AuthUserServiceTest {
     @Mock
     private ActiveOrdersChecker activeOrdersChecker;
 
+    @Mock
+    private ActiveDeliveriesChecker activeDeliveriesChecker;
+
     @InjectMocks
     private AuthUserService authUserService;
 
@@ -94,9 +97,23 @@ public class AuthUserServiceTest {
     }
 
     @Test
+    @DisplayName("deleteOwnAccount: у курьера активные доставки → ActiveDeliveriesExistException, удаление не выполняется")
+    void deleteOwnAccount_activeDeliveries() {
+        given(activeOrdersChecker.hasActiveOrders("sub-42")).willReturn(false);
+        given(activeDeliveriesChecker.activeDeliveriesCount("sub-42")).willReturn(2L);
+
+        com.utochkin.authservice.exceptions.ActiveDeliveriesExistException ex = assertThrows(
+                com.utochkin.authservice.exceptions.ActiveDeliveriesExistException.class,
+                () -> authUserService.deleteOwnAccount("sub-42"));
+
+        then(keycloakAdminClient).should(never()).deleteUser(any());
+    }
+
+    @Test
     @DisplayName("deleteOwnAccount: заказов нет → пользователь удаляется из Keycloak")
     void deleteOwnAccount_clean() {
         given(activeOrdersChecker.hasActiveOrders("sub-42")).willReturn(false);
+        given(activeDeliveriesChecker.activeDeliveriesCount("sub-42")).willReturn(0L);
         given(keycloakAdminClient.deleteUser("sub-42")).willReturn(true);
 
         authUserService.deleteOwnAccount("sub-42");
@@ -108,9 +125,28 @@ public class AuthUserServiceTest {
     @DisplayName("deleteOwnAccount: Keycloak вернул 404 → UserNotFoundException")
     void deleteOwnAccount_userNotFound() {
         given(activeOrdersChecker.hasActiveOrders("sub-42")).willReturn(false);
+        given(activeDeliveriesChecker.activeDeliveriesCount("sub-42")).willReturn(0L);
         given(keycloakAdminClient.deleteUser("sub-42")).willReturn(false);
 
         assertThrows(UserNotFoundException.class, () -> authUserService.deleteOwnAccount("sub-42"));
+    }
+
+    @Test
+    @DisplayName("deleteOwnAccount: delivery-service недоступен (FeignException после retry) → 503, без удаления")
+    void deleteOwnAccount_deliveryServiceUnavailable() {
+        given(activeOrdersChecker.hasActiveOrders("sub-42")).willReturn(false);
+        Request httpRequest = Request.create(Request.HttpMethod.GET, "http://delivery/x",
+                Map.of(), null, StandardCharsets.UTF_8, null);
+        Response httpResponse = Response.builder()
+                .status(500).reason("Internal Server Error").request(httpRequest).build();
+        given(activeDeliveriesChecker.activeDeliveriesCount("sub-42"))
+                .willThrow(FeignException.errorStatus("DeliveryServiceClient#activeDeliveriesCount", httpResponse));
+
+        ServiceUnavailableException ex = assertThrows(ServiceUnavailableException.class,
+                () -> authUserService.deleteOwnAccount("sub-42"));
+        assertThat(ex.getMessage()).contains("активные доставки");
+
+        then(keycloakAdminClient).should(never()).deleteUser(any());
     }
 
     @Test

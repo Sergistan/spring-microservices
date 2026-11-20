@@ -21,10 +21,10 @@ import static org.springframework.security.web.server.util.matcher.ServerWebExch
 /**
  * Две security-цепочки gateway (WebFlux):
  *  1) @Order(1) oauth2LoginChain — swagger-ui/docs и OAuth2-флоу входа по Keycloak;
- *  2) @Order(2) resourceServerChain — api-маршруты order/shop/payment/auth: только валидный JWT,
+ *  2) @Order(2) resourceServerChain — api-маршруты order/shop/auth: только валидный JWT,
  *     кроме анонимной регистрации POST /auth/api/v1/users.
- * Внутренние вызовы сервисов идут напрямую через Eureka, поэтому /payment/api/v1/** здесь
- * тоже закрыт — внешний анонимный доступ к платежам невозможен.
+ * /payment/api/v1/** наружу не выставляется (маршрута нет) — payment-service внутренний,
+ * как и delivery-service: внешний анонимный/пользовательский доступ к платежам невозможен.
  */
 @Configuration
 @EnableWebFluxSecurity
@@ -63,23 +63,23 @@ public class ReactiveConfig {
         return http.build();
     }
 
-    /** Цепочка 2 (@Order(2)): api-маршруты order/shop/payment/auth — JWT (ресурс-сервер); исключение — анонимная регистрация. */
+    /**
+     * Цепочка 2 (@Order(2)): api-маршруты order/shop/payment/auth — JWT (ресурс-сервер); исключение — анонимная регистрация.
+     */
     @Bean
     @Order(2)
     public SecurityWebFilterChain resourceServerChain(ServerHttpSecurity http) {
-        // Все api-маршруты (order/shop/payment) требуют JWT: внутренние вызовы order-service
-        // ходят напрямую через Eureka с собственным Authorization (пользовательский JWT или
-        // сервисный токен client_credentials из ServiceTokenClient), поэтому маршрут /payment
-        // больше не нужен фоновым задачам и закрыт для анонимных внешних клиентов.
-        // Docs-маршруты (/order/v3/api-docs и т.п.) открыты — это метаданные swagger-ui за oauth2Login.
-        // /auth/api/v1/**: единственное исключение — POST /auth/api/v1/users (саморегистрация,
-        // permitAll на уровне gateway и auth-service; защищено RequestRateLimiter в маршруте),
-        // удаление аккаунта DELETE /users/me и всё остальное — только с JWT.
+        // /payment/api/v1/** СОЗНАТЕЛЬНО НЕ входит в маршруты гейтвея: платежные операции дергает
+        // только order-service напрямую через Eureka (с релеем пользовательского JWT или сервисным
+        // токеном) — прямой вызов платежей из интернета миновал бы проверки владельца/статуса заказа
+        // (дыра закрыта). Docs-маршруты (/order/v3/api-docs и т.п.) открыты — метаданные swagger-ui
+            // за oauth2Login. /auth/api/v1/**: единственное исключение — POST /auth/api/v1/users
+        // (саморегистрация, permitAll на уровне gateway и auth-service; защищено RequestRateLimiter
+        // в маршруте), удаление аккаунта DELETE /users/me и всё остальное — только с JWT.
         http
                 .securityMatcher(pathMatchers(
                         "/order/api/v1/**",
                         "/shop/api/v1/**",
-                        "/payment/api/v1/**",
                         "/auth/api/v1/**"
                 ))
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)

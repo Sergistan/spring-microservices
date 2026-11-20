@@ -35,6 +35,9 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
     /** Активные доставки курьера (SEARCHING_COURIER/ASSIGNED/IN_DELIVERY) — исторические DELIVERED/CANCELLED не считаются. */
     List<Delivery> findByCourierIdAndStatusIn(Long courierId, Collection<DeliveryStatus> statuses);
 
+    /** Количество активных доставок курьера — для запрета удаления аккаунта курьера (внутренний вызов auth-service). */
+    long countByCourierIdAndStatusIn(Long courierId, Collection<DeliveryStatus> statuses);
+
     /** CAS-перевод статуса: UPDATE ... WHERE order_uuid = ? AND status IN (allowed). 1 = перевели, 0 = конкурент успел. */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE Delivery d SET d.status = :target, d.updatedAt = CURRENT_TIMESTAMP " +

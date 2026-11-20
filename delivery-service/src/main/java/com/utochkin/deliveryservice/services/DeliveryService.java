@@ -167,4 +167,17 @@ public class DeliveryService {
     public void retryAssignment(Delivery delivery) {
         assignCourier(delivery.getOrderUuid());
     }
+
+    /**
+     * Количество АКТИВНЫХ доставок курьера по его Keycloak sub (SEARCHING_COURIER/ASSIGNED/IN_DELIVERY;
+     * исторические не считаются) — внутренний вызов auth-service перед удалением аккаунта курьера.
+     * Нет курьера в справочнике — 0 (удалять можно).
+     */
+    @Transactional(readOnly = true)
+    public long activeDeliveriesCount(UUID subId) {
+        return courierRepository.findBySubId(subId)
+                .map(courier -> deliveryRepository.countByCourierIdAndStatusIn(courier.getId(), List.of(
+                        DeliveryStatus.SEARCHING_COURIER, DeliveryStatus.ASSIGNED, DeliveryStatus.IN_DELIVERY)))
+                .orElse(0L);
+    }
 }

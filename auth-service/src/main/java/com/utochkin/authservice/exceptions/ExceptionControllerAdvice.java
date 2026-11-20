@@ -57,6 +57,13 @@ public class ExceptionControllerAdvice {
         return new ErrorResponse(ex.getMessage());
     }
 
+    /** Курьер с активными доставками — удаление аккаунта запрещено, 400. */
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(ActiveDeliveriesExistException.class)
+    public ErrorResponse handlerActiveDeliveriesExist(ActiveDeliveriesExistException ex) {
+        return new ErrorResponse(ex.getMessage());
+    }
+
     /** Пользователь не найден в Keycloak (уже удалён?) — 404. */
     @ResponseStatus(HttpStatus.NOT_FOUND)
     @ExceptionHandler(UserNotFoundException.class)

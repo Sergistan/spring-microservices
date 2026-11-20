@@ -1,5 +1,6 @@
 package com.utochkin.authservice.services;
 
+import com.utochkin.authservice.exceptions.ActiveDeliveriesExistException;
 import com.utochkin.authservice.exceptions.ActiveOrdersExistException;
 import com.utochkin.authservice.exceptions.ServiceUnavailableException;
 import com.utochkin.authservice.exceptions.UserAlreadyExistsException;
@@ -33,6 +34,7 @@ public class AuthUserService {
 
     private final KeycloakAdminClient keycloakAdminClient;
     private final ActiveOrdersChecker activeOrdersChecker;
+    private final ActiveDeliveriesChecker activeDeliveriesChecker;
 
     /**
      * Саморегистрация: POST /users + назначение client-role. 409 от Keycloak мапится в
@@ -70,24 +72,33 @@ public class AuthUserService {
     }
 
     /**
-     * Удаление собственного аккаунта: сначала проверка активных заказов в order-service
-     * (с retry — если сервис недоступен, лучше отказать в удалении, чем удалить «вслепую»),
-     * затем DELETE пользователя из Keycloak.
+     * Удаление собственного аккаунта: сначала проверки незавершённых заказов (order-service)
+     * и активных доставок (delivery-service — курьер не может удалиться «в разгаре» доставки),
+     * затем DELETE пользователя из Keycloak. Обе проверки — Feign с retry и сервисным токеном;
+     * недоступность любого сервиса → 503 (удалять «вслепую» отказано).
      */
     public void deleteOwnAccount(String subId) {
         log.info("AuthUserService: запрос на удаление аккаунта subId={}", subId);
 
-        Boolean hasActive;
         try {
-            hasActive = activeOrdersChecker.hasActiveOrders(subId);
+            if (Boolean.TRUE.equals(activeOrdersChecker.hasActiveOrders(subId))) {
+                log.warn("AuthUserService: у subId={} есть незавершённые заказы — удаление запрещено", subId);
+                throw new ActiveOrdersExistException();
+            }
         } catch (FeignException e) {
             log.error("AuthUserService: order-service недоступен при проверке активных заказов ({})", e.getMessage());
             throw new ServiceUnavailableException("Не удалось проверить активные заказы, попробуйте позже");
         }
 
-        if (Boolean.TRUE.equals(hasActive)) {
-            log.warn("AuthUserService: у subId={} есть незавершённые заказы — удаление запрещено", subId);
-            throw new ActiveOrdersExistException();
+        try {
+            Long activeDeliveries = activeDeliveriesChecker.activeDeliveriesCount(subId);
+            if (activeDeliveries != null && activeDeliveries > 0) {
+                log.warn("AuthUserService: у курьера subId={} есть активные доставки — удаление запрещено", subId);
+                throw new ActiveDeliveriesExistException();
+            }
+        } catch (FeignException e) {
+            log.error("AuthUserService: delivery-service недоступен при проверке активных доставок ({})", e.getMessage());
+            throw new ServiceUnavailableException("Не удалось проверить активные доставки, попробуйте позже");
         }
 
         boolean deleted = keycloakAdminClient.deleteUser(subId);
