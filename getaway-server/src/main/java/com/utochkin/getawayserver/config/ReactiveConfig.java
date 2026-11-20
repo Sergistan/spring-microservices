@@ -20,7 +20,8 @@ import static org.springframework.security.web.server.util.matcher.ServerWebExch
 /**
  * Две security-цепочки gateway (WebFlux):
  *  1) @Order(1) oauth2LoginChain — swagger-ui/docs и OAuth2-флоу входа по Keycloak;
- *  2) @Order(2) resourceServerChain — все api-маршруты order/shop/payment: только валидный JWT.
+ *  2) @Order(2) resourceServerChain — api-маршруты order/shop/payment/auth: только валидный JWT,
+ *     кроме анонимной регистрации POST /auth/api/v1/users.
  * Внутренние вызовы сервисов идут напрямую через Eureka, поэтому /payment/api/v1/** здесь
  * тоже закрыт — внешний анонимный доступ к платежам невозможен.
  */
@@ -45,6 +46,7 @@ public class ReactiveConfig {
                         "/v3/api-docs/**",
                         "/order/v3/api-docs**",
                         "/shop/v3/api-docs**",
+                        "/auth/v3/api-docs**",
                         // OAuth2 flow
                         "/oauth2/**",
                         "/login/oauth2/**",
@@ -60,7 +62,7 @@ public class ReactiveConfig {
         return http.build();
     }
 
-    /** Цепочка 2 (@Order(2)): api-маршруты order/shop/payment — только валидный JWT (ресурс-сервер). */
+    /** Цепочка 2 (@Order(2)): api-маршруты order/shop/payment/auth — JWT (ресурс-сервер); исключение — анонимная регистрация. */
     @Bean
     @Order(2)
     public SecurityWebFilterChain resourceServerChain(ServerHttpSecurity http) {
@@ -69,14 +71,19 @@ public class ReactiveConfig {
         // сервисный токен client_credentials из ServiceTokenClient), поэтому маршрут /payment
         // больше не нужен фоновым задачам и закрыт для анонимных внешних клиентов.
         // Docs-маршруты (/order/v3/api-docs и т.п.) открыты — это метаданные swagger-ui за oauth2Login.
+        // /auth/api/v1/**: единственное исключение — POST /auth/api/v1/users (саморегистрация,
+        // permitAll на уровне gateway и auth-service; защищено RequestRateLimiter в маршруте),
+        // удаление аккаунта DELETE /users/me и всё остальное — только с JWT.
         http
                 .securityMatcher(pathMatchers(
                         "/order/api/v1/**",
                         "/shop/api/v1/**",
-                        "/payment/api/v1/**"
+                        "/payment/api/v1/**",
+                        "/auth/api/v1/**"
                 ))
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .authorizeExchange(ex -> ex
+                        .pathMatchers(org.springframework.http.HttpMethod.POST, "/auth/api/v1/users").permitAll()
                         .anyExchange().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 ->

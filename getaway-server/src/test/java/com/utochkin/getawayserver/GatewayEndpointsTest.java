@@ -103,6 +103,23 @@ class GatewayEndpointsTest {
     }
 
     @Test
+    @DisplayName("POST /auth/api/v1/users доступен анонимно (саморегистрация)")
+    void registerAccessibleWithoutAuth() {
+        client.post().uri("/auth/api/v1/users")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class).isEqualTo("REGISTERED");
+    }
+
+    @Test
+    @DisplayName("DELETE /auth/api/v1/users/me без jwt — 401 (удаление аккаунта требует входа)")
+    void deleteAccountRequiresAuth() {
+        client.delete().uri("/auth/api/v1/users/me")
+                .exchange()
+                .expectStatus().isUnauthorized();
+    }
+
+    @Test
     @DisplayName("order/api с jwt доступен")
     void orderApiWithJwtToken() {
         client.get().uri("/order/api/v1/orders")
@@ -159,14 +176,17 @@ class GatewayEndpointsTest {
             return http.build();
         }
 
-        // Order API — JWT (+ CORS до аутентификации, как в основном ReactiveConfig)
+        // Order/Auth API — JWT (+ CORS до аутентификации, как в основном ReactiveConfig);
+        // исключение — анонимная регистрация POST /auth/api/v1/users (permitAll)
         @Bean
         @Order(2)
         public SecurityWebFilterChain orderChain(ServerHttpSecurity http,
                                                  ReactiveJwtDecoder jwtDecoder) {
-            http.securityMatcher(pathMatchers("/order/api/v1/**"))
+            http.securityMatcher(pathMatchers("/order/api/v1/**", "/auth/api/v1/**"))
                     .csrf(ServerHttpSecurity.CsrfSpec::disable)
-                    .authorizeExchange(ex -> ex.anyExchange().authenticated())
+                    .authorizeExchange(ex -> ex
+                            .pathMatchers(org.springframework.http.HttpMethod.POST, "/auth/api/v1/users").permitAll()
+                            .anyExchange().authenticated())
                     .oauth2ResourceServer(o -> o.jwt(jwt -> jwt.jwtDecoder(jwtDecoder)));
             return http.build();
         }
@@ -196,6 +216,7 @@ class GatewayEndpointsTest {
             return route()
                     .GET("/swagger-ui.html", req -> ServerResponse.ok().bodyValue("SWAGGER-UI"))
                     .GET("/order/api/v1/orders", req -> ServerResponse.ok().bodyValue("[]"))
+                    .POST("/auth/api/v1/users", req -> ServerResponse.ok().bodyValue("REGISTERED"))
                     .build();
         }
     }
