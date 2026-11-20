@@ -17,10 +17,14 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.willThrow;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -103,5 +107,42 @@ public class AuthUserControllerTest {
                         .header("X-User-SubId", "sub-42"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.messageError").value("Нельзя удалить аккаунт: есть незавершённые заказы или доставки"));
+    }
+
+    @Test
+    @DisplayName("GET /auth/api/v1/users/me — 200: данные текущего пользователя, ФИО URL-decoded")
+    void currentUser_ReturnsInfo() throws Exception {
+        mvc.perform(get("/auth/api/v1/users/me")
+                        .with(jwt())
+                        .header("X-User-SubId", "sub-42")
+                        .header("X-User-UserName", "courier1")
+                        .header("X-User-FirstName", URLEncoder.encode("Михаил", StandardCharsets.UTF_8))
+                        .header("X-User-LastName", "Kurierov")
+                        .header("X-User-Email", "mikhail@delivery.local")
+                        .header("X-User-Role", "COURIER"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sub").value("sub-42"))
+                .andExpect(jsonPath("$.username").value("courier1"))
+                .andExpect(jsonPath("$.firstName").value("Михаил"))
+                .andExpect(jsonPath("$.lastName").value("Kurierov"))
+                .andExpect(jsonPath("$.email").value("mikhail@delivery.local"))
+                .andExpect(jsonPath("$.role").value("COURIER"));
+    }
+
+    @Test
+    @DisplayName("GET /auth/api/v1/users/me — 401 без JWT")
+    void currentUser_WithoutJwt_Returns401() throws Exception {
+        mvc.perform(get("/auth/api/v1/users/me"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("GET /auth/api/v1/users/me — 200 с пустыми полями при сервисном токене (нет пользовательских claims)")
+    void currentUser_ServiceToken_EmptyFields() throws Exception {
+        mvc.perform(get("/auth/api/v1/users/me")
+                        .with(jwt()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sub").doesNotExist())
+                .andExpect(jsonPath("$.role").doesNotExist());
     }
 }

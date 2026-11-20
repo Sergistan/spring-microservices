@@ -2,6 +2,7 @@ package com.utochkin.authservice.controllers;
 
 import com.utochkin.authservice.dto.ErrorResponse;
 import com.utochkin.authservice.services.AuthUserService;
+import com.utochkin.authservice.web.CurrentUserInfo;
 import com.utochkin.authservice.web.RegisterRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -15,11 +16,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Входная точка auth-service (маршрутизируется гейтвеем /auth/api/v1/** → 8185).
@@ -52,6 +57,36 @@ public class AuthUserController {
             description = "Данные регистрации; role — USER или COURIER", required = true) @Valid RegisterRequest request) {
         authUserService.register(request);
         return new ResponseEntity<>(HttpStatus.CREATED);
+    }
+
+    /**
+     * GET /users/me — «кто я»: данные текущего залогиненного пользователя из доверенных
+     * заголовков X-User-* гейтвея (sub = id в Keycloak). Позволяет перед необратимым
+     * DELETE /users/me убедиться, чей именно аккаунт будет удалён.
+     * ФИО приходят URL-encoded (кириллица) — декодируем, как в OrderController order-service.
+     */
+    @GetMapping("/users/me")
+    @Operation(summary = "Данные текущего пользователя (кто удалится через DELETE /users/me)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Данные текущего пользователя",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = CurrentUserInfo.class))),
+            @ApiResponse(responseCode = "401", description = "Требуется вход (Authorize)", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<CurrentUserInfo> currentUser(
+            @Parameter(hidden = true) @RequestHeader(value = "X-User-SubId", required = false) String subId,
+            @Parameter(hidden = true) @RequestHeader(value = "X-User-UserName", required = false) String username,
+            @Parameter(hidden = true) @RequestHeader(value = "X-User-FirstName", required = false) String firstName,
+            @Parameter(hidden = true) @RequestHeader(value = "X-User-LastName", required = false) String lastName,
+            @Parameter(hidden = true) @RequestHeader(value = "X-User-Email", required = false) String email,
+            @Parameter(hidden = true) @RequestHeader(value = "X-User-Role", required = false) String role) {
+        CurrentUserInfo info = new CurrentUserInfo(
+                subId,
+                username,
+                firstName != null ? URLDecoder.decode(firstName, StandardCharsets.UTF_8) : null,
+                lastName != null ? URLDecoder.decode(lastName, StandardCharsets.UTF_8) : null,
+                email,
+                role);
+        return new ResponseEntity<>(info, HttpStatus.OK);
     }
 
     /**
