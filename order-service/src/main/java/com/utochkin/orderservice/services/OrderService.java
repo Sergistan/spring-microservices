@@ -349,20 +349,23 @@ public class OrderService {
 
     /**
      * Перевод оплаченного заказа в DELIVERING — внутренний вызов delivery-service
-     * (сервисный токен, проверка azp в контроллере) через 5 минут после оплаты.
+     * (сервисный токен, проверка azp в контроллере) через 5 минут после оплаты;
+     * courierName — ФИО назначенного курьера, попадает в событие DELIVERING (письмо покупателю).
      * CAS из SUCCESS: гонку с возвратом решает владелец статуса (order-service) —
      * 0 строк означает, что конкурент (refundedOrder) уже увёл заказ из SUCCESS.
      * Повтор при DELIVERING/DELIVERED идемпотентен (200 без второго события),
      * прочие статусы — 409 (доставка обязана отменить свою сторону и освободить курьера).
      * Событие DELIVERING фиксируется в outbox в одной транзакции с переводом.
      */
-    public DeliveryStatusResponse markOrderDelivering(UUID orderUuid) {
+    public DeliveryStatusResponse markOrderDelivering(UUID orderUuid, String courierName) {
         orderRepository.findByOrderUuid(orderUuid).orElseThrow(OrderNotFoundException::new);
         Boolean applied = transactionTemplate.execute(txStatus -> {
             Integer updated = orderRepository.transitionStatus(orderUuid, List.of(Status.SUCCESS), Status.DELIVERING);
             if (updated != null && updated > 0) {
                 Order fresh = orderRepository.findByOrderUuid(orderUuid).orElseThrow(OrderNotFoundException::new);
-                outboxService.saveToOutbox(toKafkaDto(fresh));
+                OrderDtoForKafka dto = toKafkaDto(fresh);
+                dto.setCourierName(courierName);
+                outboxService.saveToOutbox(dto);
                 return true;
             }
             return false;

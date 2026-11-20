@@ -8,6 +8,7 @@ import lombok.*;
 import java.io.Serializable;
 import java.util.UUID;
 
+/** Позиция заказа: артикул товара + количество (удаляются при возврате). */
 @NoArgsConstructor
 @AllArgsConstructor
 @Setter

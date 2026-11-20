@@ -13,6 +13,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Событие состояния заказа в topic-orders. Продюсер — order-service (transactional outbox),
+ * консьюмеры — notification/history/delivery (у каждого своя копия этого контракта).
+ */
 @Data
 @AllArgsConstructor
 @Schema(description = "Оплаченный заказ")
@@ -48,4 +52,7 @@ public class OrderDtoForKafka implements Serializable {
 
     @Schema(description = "Уникальный идентификатор события для дедупликации у консьюмеров", type = "string", format = "uuid")
     private UUID eventId;
+
+    @Schema(description = "ФИО курьера, принявшего заказ (только в событии DELIVERING — передаёт delivery-service)", example = "Ivan Kurierov")
+    private String courierName;
 }

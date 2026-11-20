@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 
+/** Тело создания/обновления товара (ADMIN-эндпоинты POST/PUT /products). */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor

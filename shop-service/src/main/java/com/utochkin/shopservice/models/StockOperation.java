@@ -6,6 +6,7 @@ import lombok.*;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/** Маркер идемпотентности изменения остатков: UNIQUE(order_uuid, type) защищает от повторного списания/восстановления. */
 @NoArgsConstructor
 @AllArgsConstructor
 @Setter

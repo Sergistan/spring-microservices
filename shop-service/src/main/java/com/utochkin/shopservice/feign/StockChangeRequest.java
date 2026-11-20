@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 import java.util.UUID;
 
+/** Команда изменения остатков от order-service: orderUuid — ключ идемпотентности, позиции — что менять. */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor

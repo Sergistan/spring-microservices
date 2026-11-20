@@ -18,6 +18,10 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableWebSecurity
 public class Config {
 
+    /**
+     * Цепочка фильтров: stateless (без сессий), всё — с валидным JWT;
+     * публично только swagger (внутренняя сеть) и actuator-эндпоинты (health/prometheus).
+     */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http

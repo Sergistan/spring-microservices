@@ -1,7 +1,9 @@
 package com.utochkin.deliveryservice.services;
 
+import com.utochkin.deliveryservice.models.Courier;
 import com.utochkin.deliveryservice.models.Delivery;
 import com.utochkin.deliveryservice.models.DeliveryStatus;
+import com.utochkin.deliveryservice.repositories.CourierRepository;
 import com.utochkin.deliveryservice.repositories.DeliveryRepository;
 import feign.FeignException;
 import feign.Request;
@@ -37,6 +39,9 @@ public class DeliveryProgressJobTest {
     private DeliveryRepository deliveryRepository;
 
     @Mock
+    private CourierRepository courierRepository;
+
+    @Mock
     private DeliveryService deliveryService;
 
     @Mock
@@ -54,10 +59,16 @@ public class DeliveryProgressJobTest {
         ReflectionTestUtils.setField(job, "reassignAfterMinutes", 1L);
         given(deliveryRepository.findByStatusAndUpdatedAtBefore(any(), any())).willReturn(List.of());
         given(deliveryRepository.findByStatusInAndPaidAtBefore(any(), any())).willReturn(List.of());
+        given(courierRepository.findById(any())).willReturn(java.util.Optional.empty());
     }
 
     private Delivery delivery(DeliveryStatus status) {
         return Delivery.builder().orderUuid(orderUuid).status(status)
+                .paidAt(LocalDateTime.now().minusMinutes(10)).build();
+    }
+
+    private Delivery deliveryWithCourier(DeliveryStatus status, Long courierId) {
+        return Delivery.builder().orderUuid(orderUuid).status(status).courierId(courierId)
                 .paidAt(LocalDateTime.now().minusMinutes(10)).build();
     }
 
@@ -69,16 +80,30 @@ public class DeliveryProgressJobTest {
     }
 
     @Test
-    @DisplayName("T+5мин: 200 от order-service → markInDelivery")
+    @DisplayName("T+5мин: 200 от order-service → markInDelivery; ФИО курьера передаётся для письма")
     void start_success() {
         given(deliveryRepository.findByStatusInAndPaidAtBefore(any(), any()))
-                .willReturn(List.of(delivery(DeliveryStatus.ASSIGNED)));
+                .willReturn(List.of(deliveryWithCourier(DeliveryStatus.ASSIGNED, 5L)));
+        given(courierRepository.findById(5L)).willReturn(java.util.Optional.of(Courier.builder()
+                .id(5L).username("courier2").firstName("Ivan").lastName("Kurierov").build()));
 
         job.progress();
 
-        then(orderDeliveryClient).should().startDelivery(orderUuid);
+        then(orderDeliveryClient).should().startDelivery(orderUuid, "Ivan Kurierov");
         then(deliveryService).should().markInDelivery(orderUuid);
         then(deliveryService).should(never()).cancelDelivery(any());
+    }
+
+    @Test
+    @DisplayName("T+5мин: курьер не назначен (SEARCHING_COURIER) → старт с courierName=null")
+    void start_withoutCourier_nullName() {
+        given(deliveryRepository.findByStatusInAndPaidAtBefore(any(), any()))
+                .willReturn(List.of(delivery(DeliveryStatus.SEARCHING_COURIER)));
+
+        job.progress();
+
+        then(orderDeliveryClient).should().startDelivery(orderUuid, null);
+        then(deliveryService).should().markInDelivery(orderUuid);
     }
 
     @Test
@@ -86,7 +111,7 @@ public class DeliveryProgressJobTest {
     void start_conflict_cancels() {
         given(deliveryRepository.findByStatusInAndPaidAtBefore(any(), any()))
                 .willReturn(List.of(delivery(DeliveryStatus.ASSIGNED)));
-        willThrow(feignStatus(409)).given(orderDeliveryClient).startDelivery(orderUuid);
+        willThrow(feignStatus(409)).given(orderDeliveryClient).startDelivery(orderUuid, null);
 
         job.progress();
 
@@ -99,7 +124,7 @@ public class DeliveryProgressJobTest {
     void start_technicalFailure_noChanges() {
         given(deliveryRepository.findByStatusInAndPaidAtBefore(any(), any()))
                 .willReturn(List.of(delivery(DeliveryStatus.ASSIGNED)));
-        willThrow(feignStatus(503)).given(orderDeliveryClient).startDelivery(orderUuid);
+        willThrow(feignStatus(503)).given(orderDeliveryClient).startDelivery(orderUuid, null);
 
         job.progress();
 

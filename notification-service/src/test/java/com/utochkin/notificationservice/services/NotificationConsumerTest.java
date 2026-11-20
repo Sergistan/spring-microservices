@@ -55,7 +55,8 @@ public class NotificationConsumerTest {
                 new UserDto("john", "John", "Doe", "john@doe.com"),
                 List.of(new OrderRequest(UUID.randomUUID(), 2)),
                 UUID.randomUUID(),
-                UUID.randomUUID()
+                UUID.randomUUID(),
+                null
         );
     }
 
@@ -90,7 +91,8 @@ public class NotificationConsumerTest {
                 new UserDto("john", "John", "Doe", ""),
                 base.getOrderRequests(),
                 base.getPaymentId(),
-                base.getEventId()
+                base.getEventId(),
+                null
         );
         given(processedEventsStore.tryAcquire(order.getEventId())).willReturn(true);
 
@@ -142,20 +144,22 @@ public class NotificationConsumerTest {
     }
 
     @Test
-    @DisplayName("DELIVERING — письмо «курьер принял заказ, будет доставлен в течение дня» отправляется")
+    @DisplayName("DELIVERING — письмо «курьер принял заказ, будет доставлен в течение дня» с ФИО курьера")
     void onOrderEvent_delivering_sendsEmail() {
         var base = baseOrder();
         var order = new OrderDtoForKafka(
                 base.getOrderUuid(), base.getTotalAmount(), Status.DELIVERING,
                 base.getCreatedAt(), base.getUpdatedAt(), base.getAddressDto(),
-                base.getUserDto(), base.getOrderRequests(), base.getPaymentId(), base.getEventId());
+                base.getUserDto(), base.getOrderRequests(), base.getPaymentId(), base.getEventId(),
+                "Ivan Kurierov");
         given(processedEventsStore.tryAcquire(order.getEventId())).willReturn(true);
 
         consumer.onOrderEvent(order, ack);
 
         then(emailService).should().sendOrderNotification(
                 eq("john@doe.com"), eq("Номер заказа " + order.getOrderUuid()),
-                argThat(text -> text.contains("принят курьером") && text.contains("в течение дня")));
+                argThat(text -> text.contains("принят курьером") && text.contains("в течение дня")
+                        && text.contains("Ваш курьер: Ivan Kurierov")));
         then(ack).should().acknowledge();
     }
 
@@ -166,7 +170,8 @@ public class NotificationConsumerTest {
         var order = new OrderDtoForKafka(
                 base.getOrderUuid(), base.getTotalAmount(), Status.DELIVERED,
                 base.getCreatedAt(), base.getUpdatedAt(), base.getAddressDto(),
-                base.getUserDto(), base.getOrderRequests(), base.getPaymentId(), base.getEventId());
+                base.getUserDto(), base.getOrderRequests(), base.getPaymentId(), base.getEventId(),
+                null);
         given(processedEventsStore.tryAcquire(order.getEventId())).willReturn(true);
 
         consumer.onOrderEvent(order, ack);

@@ -20,6 +20,11 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableWebSecurity
 public class Config {
 
+    /**
+     * Цепочка фильтров: stateless (без сессий); публично открыты swagger/actuator и ЕДИНСТВЕННЫЙ
+     * анонимный путь POST /auth/api/v1/users (саморегистрация) — удаление аккаунта и всё
+     * остальное требуют валидный JWT.
+     */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http

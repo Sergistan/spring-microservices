@@ -16,6 +16,12 @@ import java.util.List;
 import java.util.UUID;
 import java.math.BigDecimal;
 
+/**
+ * Копия контракта события order-service (topic-orders) на стороне консьюмера (документ MongoDB
+ * orderHistory хранит эти объекты в массиве orders пользователя). Тип-маппинг пакетов задан
+ * в config-repo: spring.json.type.mapping
+ * com.utochkin.orderservice.dto.OrderDtoForKafka -> com.utochkin.historyservice.dto.OrderDtoForKafka.
+ */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
@@ -47,4 +53,7 @@ public class OrderDtoForKafka implements Serializable {
 
     @Field(targetType = FieldType.STRING)
     private UUID eventId;
+
+    /** ФИО курьера — только в событии DELIVERING (передаёт delivery-service). */
+    private String courierName;
 }

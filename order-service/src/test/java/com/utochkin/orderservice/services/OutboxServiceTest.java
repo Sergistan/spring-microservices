@@ -47,6 +47,7 @@ public class OutboxServiceTest {
                 null,
                 null,
                 UUID.randomUUID(),
+                null,
                 null
         );
     }

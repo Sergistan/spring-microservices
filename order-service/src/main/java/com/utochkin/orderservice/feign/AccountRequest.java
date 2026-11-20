@@ -9,6 +9,10 @@ import lombok.Data;
 import java.math.BigDecimal;
 import java.util.UUID;
 
+/**
+ * Тело запроса платежа/возврата в payment-service (Feign): идемпотентный ключ orderUuid,
+ * сумма операции и карта списания/зачисления.
+ */
 @AllArgsConstructor
 @Data
 public class AccountRequest {

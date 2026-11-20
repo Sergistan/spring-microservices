@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 
 import java.util.UUID;
 
+/** Позиция заказа в запросе клиента: articleId + количество. */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor

@@ -7,6 +7,7 @@ import org.springframework.data.mongodb.core.mapping.FieldType;
 
 import java.util.UUID;
 
+/** Позиция заказа из события. */
 public record OrderRequest(@Field(targetType = FieldType.STRING) @NotEmpty UUID articleId,
                           @Positive Integer quantity) {
 

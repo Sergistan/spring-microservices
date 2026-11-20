@@ -6,6 +6,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 
+/** Платёжный счёт-карта: номер (UNIQUE) + баланс; списание/зачисление — атомарные условные UPDATE. */
 @NoArgsConstructor
 @AllArgsConstructor
 @Setter

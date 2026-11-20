@@ -15,6 +15,10 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Агрегат заказа: бизнес-ключ orderUuid (UNIQUE), статусная машина (Status, все переходы —
+ * CAS через OrderRepository.transitionStatus), позиции, платёж, владелец-зеркало User.
+ */
 @NoArgsConstructor
 @AllArgsConstructor
 @Setter

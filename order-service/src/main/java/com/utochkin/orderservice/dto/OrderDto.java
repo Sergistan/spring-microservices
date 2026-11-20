@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+/** Ответ создания заказа (201): ключевые поля без позиционных подробностей Kafka-события. */
 @Schema(description = "Созданный заказ")
 public record OrderDto(
         @Schema(description = "UUID заказа", example = "3f9edc4b-e4cf-4257-a485-72a147a0b45f", type = "string", format = "uuid")

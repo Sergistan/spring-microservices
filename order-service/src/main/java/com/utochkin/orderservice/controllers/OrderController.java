@@ -8,6 +8,7 @@ import com.utochkin.orderservice.exceptions.OrderAccessDeniedException;
 import com.utochkin.orderservice.models.User;
 import com.utochkin.orderservice.web.CardRequest;
 import com.utochkin.orderservice.web.CompositeRequest;
+import com.utochkin.orderservice.web.CourierRequest;
 import com.utochkin.orderservice.web.PaymentRequest;
 import com.utochkin.orderservice.feign.PaymentResponse;
 import com.utochkin.orderservice.services.OrderService;
@@ -137,16 +138,18 @@ public class OrderController {
 
     /**
      * POST /orders/{orderUuid}/deliveries — внутренний эндпоинт delivery-service (T+5 минут
-     * после оплаты): CAS-перевод SUCCESS -> DELIVERING + событие в outbox. 409 = заказ уже
-     * не SUCCESS (успел возврат) — доставка обязана отмениться и освободить курьера.
+     * после оплаты): CAS-перевод SUCCESS -> DELIVERING + событие в outbox (в событие попадает
+     * ФИО курьера из тела запроса — для письма покупателю). 409 = заказ уже не SUCCESS
+     * (успел возврат) — доставка обязана отмениться и освободить курьера.
      * Доступен только сервисному токену клиента delivery-service-client (проверка claim azp).
      */
     @Hidden
     @PostMapping("/orders/{orderUuid}/deliveries")
     public ResponseEntity<DeliveryStatusResponse> startDelivery(@Parameter(hidden = true) @PathVariable UUID orderUuid,
+                                                                @Parameter(hidden = true) @RequestBody @Valid CourierRequest courierRequest,
                                                                 @Parameter(hidden = true) JwtAuthenticationToken authentication) {
         requireServiceClient(authentication, "delivery-service-client");
-        return new ResponseEntity<>(orderService.markOrderDelivering(orderUuid), HttpStatus.OK);
+        return new ResponseEntity<>(orderService.markOrderDelivering(orderUuid, courierRequest.courierName()), HttpStatus.OK);
     }
 
     /**

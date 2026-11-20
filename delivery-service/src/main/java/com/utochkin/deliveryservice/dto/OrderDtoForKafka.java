@@ -46,4 +46,7 @@ public class OrderDtoForKafka implements Serializable {
     private UUID paymentId;
 
     private UUID eventId;
+
+    /** ФИО курьера — только в событии DELIVERING (передаёт delivery-service). */
+    private String courierName;
 }

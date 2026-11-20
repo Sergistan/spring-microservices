@@ -2,6 +2,7 @@ package com.utochkin.authservice.keycloak;
 
 import com.utochkin.authservice.keycloak.KeycloakCreateUserRequest.Credential;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
@@ -44,6 +45,9 @@ public class KeycloakAdminClient {
     private final RestClient restClient;
     private final String targetClientId;
 
+    // @Autowired явно указывает Spring использовать этот конструктор (в классе есть
+    // второй пакетный конструктор для тестов — без аннотации Spring не выбирает между ними)
+    @Autowired
     public KeycloakAdminClient(ServiceTokenClient serviceTokenClient,
                                @Value("${keycloak.admin.base-url:http://keycloak:8080/admin/realms/microservices-realm}") String baseUrl,
                                @Value("${keycloak.admin.target-client-id:spring-microservices}") String targetClientId,

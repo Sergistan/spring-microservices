@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.util.UUID;
 
+/** Тело внутренних POST /payments и /refunds (вызовы order-service через Feign). */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor

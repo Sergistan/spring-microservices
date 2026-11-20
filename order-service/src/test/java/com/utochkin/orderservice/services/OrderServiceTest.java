@@ -145,7 +145,7 @@ public class OrderServiceTest {
                         uuid, BigDecimal.valueOf(100.0), Status.REFUNDED,
                         order.getCreatedAt(), LocalDateTime.now(),
                         addrDto, new UserDto("bob", "", "", ""),
-                        orderRequests, UUID.randomUUID(), UUID.randomUUID()
+                        orderRequests, UUID.randomUUID(), UUID.randomUUID(), null
                 ));
 
         given(transactionTemplate.execute(any()))
@@ -306,7 +306,7 @@ public class OrderServiceTest {
                 .willReturn(new OrderDtoForKafka(
                         uuid, BigDecimal.valueOf(100.0), Status.SUCCESS,
                         order.getCreatedAt(), LocalDateTime.now(),
-                        addrDto, new UserDto("bob", "", "", ""), orderRequests, success.getPaymentId(), UUID.randomUUID()
+                        addrDto, new UserDto("bob", "", "", ""), orderRequests, success.getPaymentId(), UUID.randomUUID(), null
                 ));
 
         PaymentResponse resp = orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"), "owner-sub");
@@ -331,7 +331,7 @@ public class OrderServiceTest {
                 .willReturn(new OrderDtoForKafka(
                         uuid, BigDecimal.valueOf(100.0), Status.FAILED,
                         order.getCreatedAt(), LocalDateTime.now(),
-                        addrDto, new UserDto("bob", "", "", ""), orderRequests, failed.getPaymentId(), UUID.randomUUID()
+                        addrDto, new UserDto("bob", "", "", ""), orderRequests, failed.getPaymentId(), UUID.randomUUID(), null
                 ));
 
         assertThrows(FailedPayOrderException.class, () ->
@@ -372,7 +372,7 @@ public class OrderServiceTest {
                 .willReturn(new OrderDtoForKafka(
                         uuid, BigDecimal.valueOf(100.0), Status.SUCCESS,
                         order.getCreatedAt(), LocalDateTime.now(),
-                        addrDto, new UserDto("bob", "", "", ""), orderRequests, success.getPaymentId(), UUID.randomUUID()
+                        addrDto, new UserDto("bob", "", "", ""), orderRequests, success.getPaymentId(), UUID.randomUUID(), null
                 ));
 
         PaymentResponse resp = orderService.paymentOrder(new PaymentRequest(uuid, "1111 2222 3333 4444"), "owner-sub");
@@ -685,7 +685,7 @@ public class OrderServiceTest {
         order.setOrderStatus(Status.SUCCESS);
         given(orderRepository.transitionStatus(uuid, List.of(Status.SUCCESS), Status.DELIVERING)).willReturn(1);
 
-        DeliveryStatusResponse response = orderService.markOrderDelivering(uuid);
+        DeliveryStatusResponse response = orderService.markOrderDelivering(uuid, "Ivan Kurierov");
 
         assertThat(response.orderUuid()).isEqualTo(uuid);
         assertThat(response.orderStatus()).isEqualTo(Status.DELIVERING);
@@ -698,7 +698,7 @@ public class OrderServiceTest {
         order.setOrderStatus(Status.REFUNDED);
         given(orderRepository.transitionStatus(uuid, List.of(Status.SUCCESS), Status.DELIVERING)).willReturn(0);
 
-        assertThrows(DeliveryConflictException.class, () -> orderService.markOrderDelivering(uuid));
+        assertThrows(DeliveryConflictException.class, () -> orderService.markOrderDelivering(uuid, "Ivan Kurierov"));
         then(outboxService).should(never()).saveToOutbox(any());
     }
 
@@ -708,7 +708,7 @@ public class OrderServiceTest {
         order.setOrderStatus(Status.DELIVERING);
         given(orderRepository.transitionStatus(uuid, List.of(Status.SUCCESS), Status.DELIVERING)).willReturn(0);
 
-        DeliveryStatusResponse response = orderService.markOrderDelivering(uuid);
+        DeliveryStatusResponse response = orderService.markOrderDelivering(uuid, "Ivan Kurierov");
 
         assertThat(response.orderStatus()).isEqualTo(Status.DELIVERING);
         then(outboxService).should(never()).saveToOutbox(any());

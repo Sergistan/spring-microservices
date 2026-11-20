@@ -218,13 +218,15 @@ public class OrderControllerTest {
     }
 
     @Test
-    @DisplayName("POST /order/api/v1/orders/{uuid}/deliveries — 200, сервисный токен delivery-service-client")
+    @DisplayName("POST /order/api/v1/orders/{uuid}/deliveries — 200, сервисный токен delivery-service-client + ФИО курьера в теле")
     void startDelivery_ServiceClient_Returns200() throws Exception {
-        given(orderService.markOrderDelivering(orderUuid))
+        given(orderService.markOrderDelivering(orderUuid, "Ivan Kurierov"))
                 .willReturn(new DeliveryStatusResponse(orderUuid, Status.DELIVERING));
 
         mvc.perform(post("/order/api/v1/orders/{uuid}/deliveries", orderUuid)
                         .with(jwt().jwt(j -> j.claim("azp", "delivery-service-client")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"courierName\":\"Ivan Kurierov\"}")
                 )
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.orderUuid").value(orderUuid.toString()))
@@ -236,11 +238,13 @@ public class OrderControllerTest {
     void startDelivery_UserToken_Forbidden() throws Exception {
         mvc.perform(post("/order/api/v1/orders/{uuid}/deliveries", orderUuid)
                         .with(jwt().jwt(j -> j.claim("azp", "spring-microservices")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"courierName\":\"Ivan Kurierov\"}")
                 )
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.messageError").value("Ошибка: доступ разрешён только внутренним сервисам"));
 
-        then(orderService).should(never()).markOrderDelivering(any());
+        then(orderService).should(never()).markOrderDelivering(any(), any());
     }
 
     @Test

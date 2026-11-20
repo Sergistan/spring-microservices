@@ -1,6 +1,7 @@
 package com.utochkin.notificationservice.services;
 
 import com.utochkin.notificationservice.dto.OrderDtoForKafka;
+import com.utochkin.notificationservice.dto.Status;
 import lombok.AllArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -58,7 +59,7 @@ public class NotificationConsumer {
      * DELIVERED -> письмо не шлём: уведомили уже при DELIVERING («будет доставлен в течение дня»).
      */
     private void sendNotification(OrderDtoForKafka orderDto) {
-        if (orderDto.getOrderStatus() == com.utochkin.notificationservice.dto.Status.DELIVERED) {
+        if (orderDto.getOrderStatus() == Status.DELIVERED) {
             log.info("NotificationConsumer: заказ {} доставлен — письмо не отправляем (уведомление ушло при DELIVERING)",
                     orderDto.getOrderUuid());
             return;
@@ -152,6 +153,11 @@ public class NotificationConsumer {
                             .append(", квартира № ")
                             .append(orderDto.getAddressDto().apartmentNumber())
                             .append(".\n\n");
+                    if (orderDto.getCourierName() != null && !orderDto.getCourierName().isBlank()) {
+                        sb.append("Ваш курьер: ")
+                                .append(orderDto.getCourierName())
+                                .append(".\n\n");
+                    }
                     sb.append("Заказ будет доставлен в течение дня.")
                             .append("\n");
                 }

@@ -11,6 +11,7 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.util.UUID;
 
+/** Товар каталога: артикул (UNIQUE), остаток (CHECK quantity >= 0), цена. Списание/восстановление — атомарные UPDATE. */
 @NoArgsConstructor
 @AllArgsConstructor
 @Setter

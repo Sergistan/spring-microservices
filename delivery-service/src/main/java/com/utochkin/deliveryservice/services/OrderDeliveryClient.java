@@ -1,5 +1,6 @@
 package com.utochkin.deliveryservice.services;
 
+import com.utochkin.deliveryservice.feign.CourierInfo;
 import com.utochkin.deliveryservice.feign.OrderServiceClient;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
@@ -24,11 +25,11 @@ public class OrderDeliveryClient {
 
     private final OrderServiceClient orderServiceClient;
 
-    /** Заказ → DELIVERING (CAS из SUCCESS на стороне order-service). */
+    /** Заказ → DELIVERING (CAS из SUCCESS на стороне order-service); courierName — в событие/письмо. */
     @CircuitBreaker(name = "circuitBreakerOrderDelivery", fallbackMethod = "startDeliveryFallback")
     @Retry(name = "retryOrderDelivery", fallbackMethod = "startDeliveryFallback")
-    public void startDelivery(UUID orderUuid) {
-        orderServiceClient.startDelivery(orderUuid);
+    public void startDelivery(UUID orderUuid, String courierName) {
+        orderServiceClient.startDelivery(orderUuid, new CourierInfo(courierName));
     }
 
     /** Заказ → DELIVERED (CAS из DELIVERING). */
@@ -39,7 +40,7 @@ public class OrderDeliveryClient {
     }
 
     /** Fallback: пробрасываем исходную ошибку — джоба сама различает 409 (бизнес) и технический сбой. */
-    public void startDeliveryFallback(UUID orderUuid, Throwable throwable) {
+    public void startDeliveryFallback(UUID orderUuid, String courierName, Throwable throwable) {
         throw (throwable instanceof RuntimeException re) ? re
                 : new IllegalStateException("startDelivery не выполнен: " + throwable.getMessage(), throwable);
     }

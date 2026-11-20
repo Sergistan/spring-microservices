@@ -1,7 +1,9 @@
 package com.utochkin.deliveryservice.services;
 
+import com.utochkin.deliveryservice.models.Courier;
 import com.utochkin.deliveryservice.models.Delivery;
 import com.utochkin.deliveryservice.models.DeliveryStatus;
+import com.utochkin.deliveryservice.repositories.CourierRepository;
 import com.utochkin.deliveryservice.repositories.DeliveryRepository;
 import feign.FeignException;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +38,7 @@ public class DeliveryProgressJob {
     private final DeliveryRepository deliveryRepository;
     private final DeliveryService deliveryService;
     private final OrderDeliveryClient orderDeliveryClient;
+    private final CourierRepository courierRepository;
 
     @Value("${delivery.timing.start-after-minutes:5}")
     private long startAfterMinutes;
@@ -45,6 +48,16 @@ public class DeliveryProgressJob {
 
     @Value("${delivery.timing.reassign-after-minutes:1}")
     private long reassignAfterMinutes;
+
+    /** ФИО назначенного курьера доставки ("Имя Фамилия"); null, если курьер ещё не назначен/не найден. */
+    private String courierFullName(Delivery delivery) {
+        if (delivery.getCourierId() == null) {
+            return null;
+        }
+        return courierRepository.findById(delivery.getCourierId())
+                .map(c -> ((c.getFirstName() + " " + c.getLastName()).trim()))
+                .orElse(null);
+    }
 
     @Scheduled(fixedDelayString = "${delivery.progress.fixed-delay:30000}")
     public void progress() {
@@ -67,10 +80,11 @@ public class DeliveryProgressJob {
                 List.of(DeliveryStatus.SEARCHING_COURIER, DeliveryStatus.ASSIGNED), now.minusMinutes(startAfterMinutes));
         for (Delivery delivery : toStart) {
             try {
-                orderDeliveryClient.startDelivery(delivery.getOrderUuid());
+                String courierName = courierFullName(delivery);
+                orderDeliveryClient.startDelivery(delivery.getOrderUuid(), courierName);
                 deliveryService.markInDelivery(delivery.getOrderUuid());
-                log.info("DeliveryProgressJob: заказ {} передан в доставку (DELIVERING), стадия IN_DELIVERY",
-                        delivery.getOrderUuid());
+                log.info("DeliveryProgressJob: заказ {} передан в доставку (DELIVERING, курьер: {}), стадия IN_DELIVERY",
+                        delivery.getOrderUuid(), courierName != null ? courierName : "не назначен");
             } catch (FeignException fe) {
                 if (fe.status() == HttpStatus.CONFLICT.value()) {
                     // Заказ уже не SUCCESS — покупатель успел вернуть в 5-минутном окне

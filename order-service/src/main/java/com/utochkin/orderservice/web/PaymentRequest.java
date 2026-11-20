@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 
 import java.util.UUID;
 
+/** Внутренняя команда оплаты/возврата: orderUuid + номер карты (собирается в OrderController). */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
