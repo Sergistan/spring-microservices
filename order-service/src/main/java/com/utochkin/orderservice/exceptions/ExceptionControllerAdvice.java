@@ -61,50 +61,70 @@ public class ExceptionControllerAdvice {
                 .collect(Collectors.joining("; "));
         return new ErrorResponse("Некорректные данные: " + details);
     }
+    /** Технический сбой (shop/payment недоступны, исчерпаны fallback-сценарии) → понятный 503 вместо стектрейса. */
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     @ExceptionHandler(ServiceUnavailableException.class)
     public ErrorResponse handlerServiceUnavailableException(ServiceUnavailableException serviceUnavailableException) {
         return new ErrorResponse(serviceUnavailableException.getMessage());
     }
 
+    /** Заказ по UUID не найден (ошибка в ссылке/повтор после удаления) → 404. */
     @ResponseStatus(HttpStatus.NOT_FOUND)
     @ExceptionHandler(OrderNotFoundException.class)
     public ErrorResponse handlerOrderNotFoundException(OrderNotFoundException orderNotFoundException) {
         return new ErrorResponse(orderNotFoundException.getMessage());
     }
 
+    /** Локальный пользователь по subId+username не найден (рассинхронизация зеркала) → 404. */
     @ResponseStatus(HttpStatus.NOT_FOUND)
     @ExceptionHandler(UserNotFoundException.class)
     public ErrorResponse handlerUserNotFoundException(UserNotFoundException userNotFoundException) {
         return new ErrorResponse(userNotFoundException.getMessage());
     }
 
+    /** Платёж отклонён: не хватает средств на карте → 402 PAYMENT_REQUIRED (специальный код для оплаты). */
     @ResponseStatus(HttpStatus.PAYMENT_REQUIRED)
     @ExceptionHandler(FailedPayOrderException.class)
     public ErrorResponse handlerFailedPayOrderException(FailedPayOrderException failedPayOrderException) {
         return new ErrorResponse(failedPayOrderException.getMessage());
     }
 
+    /** Бизнес-отказ по статусу заказа: повторная оплата, возврат неоплаченного/доставленного заказа и т.п. → 400. */
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(FailedOrderStatusException.class)
     public ErrorResponse handlerFailedOrderStatusException(FailedOrderStatusException failedOrderStatusException) {
         return new ErrorResponse(failedOrderStatusException.getMessage());
     }
+
+    /** Карта с таким номером не найдена в payment-service (Feign 404) → 404. */
     @ResponseStatus(HttpStatus.NOT_FOUND)
     @ExceptionHandler(CardNumberNotFoundException.class)
     public ErrorResponse handlerCardNumberNotFoundException(CardNumberNotFoundException cardNumberNotFoundException) {
         return new ErrorResponse(cardNumberNotFoundException.getMessage());
     }
 
+    /** Товара нет в магазине или его количества недостаточно (Feign 409/404 от shop) → 400. */
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(ProductUnavailableException.class)
     public ErrorResponse handlerProductUnavailableException(ProductUnavailableException productUnavailableException) {
         return new ErrorResponse(productUnavailableException.getMessage());
     }
 
+    /** Доступ к чужому заказу (subId не совпадает) или к внутреннему эндпоинту с чужим azp → 403. */
     @ResponseStatus(HttpStatus.FORBIDDEN)
     @ExceptionHandler(OrderAccessDeniedException.class)
     public ErrorResponse handlerOrderAccessDeniedException(OrderAccessDeniedException orderAccessDeniedException) {
         return new ErrorResponse(orderAccessDeniedException.getMessage());
+    }
+
+    /**
+     * Конфликт операции доставки с текущим статусом заказа: delivery-service запросил
+     * DELIVERING/DELIVERED, но заказ уже, например, REFUNDED (возврат успел в 5-минутное окно).
+     * 409 — сигнал доставки отменить свою сторону (CANCELLED + освободить курьера).
+     */
+    @ResponseStatus(HttpStatus.CONFLICT)
+    @ExceptionHandler(DeliveryConflictException.class)
+    public ErrorResponse handlerDeliveryConflictException(DeliveryConflictException deliveryConflictException) {
+        return new ErrorResponse(deliveryConflictException.getMessage());
     }
 }

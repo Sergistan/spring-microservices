@@ -28,6 +28,13 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     /** Заказ по бизнес-ключу orderUuid (приходит из API). */
     Optional<Order> findByOrderUuid(UUID orderUuid);
 
+    /**
+     * Есть ли у пользователя subId заказы НЕ в финальных статусах (FAILED/REFUNDED/DELIVERED).
+     * Используется auth-service при удалении аккаунта: активные заказы (включая SUCCESS,
+     * т.к. после оплаты предстоит доставка) запрещают удаление.
+     */
+    boolean existsByUser_SubIdAndOrderStatusNotIn(String subId, Collection<Status> statuses);
+
     /** До 50 заказов в заданных статусах, не обновлявшихся раньше порога (выборка ReconciliationJob). */
     List<Order> findTop50ByOrderStatusInAndUpdatedAtBefore(Collection<Status> orderStatuses, LocalDateTime updatedAtBefore);
 

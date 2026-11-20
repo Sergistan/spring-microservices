@@ -18,7 +18,7 @@ public record OrderDto(
         @Schema(description = "Общая стоимость заказа", example = "1000.00", type = "number")
         BigDecimal totalAmount,
 
-        @Schema(description = "Статус заказа", example = "SUCCESS", allowableValues = {"WAITING_FOR_PAYMENT", "SUCCESS", "FAILED", "REFUNDED"})
+        @Schema(description = "Статус заказа", example = "SUCCESS", allowableValues = {"WAITING_FOR_PAYMENT", "SUCCESS", "FAILED", "REFUNDED", "DELIVERING", "DELIVERED"})
         Status orderStatus,
 
         @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm")

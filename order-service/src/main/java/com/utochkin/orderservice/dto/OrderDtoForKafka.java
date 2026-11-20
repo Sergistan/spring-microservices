@@ -23,7 +23,7 @@ public class OrderDtoForKafka implements Serializable {
     @Schema(description = "Общая стоимость заказа", example = "1000.00", type = "number")
     private final BigDecimal totalAmount;
 
-    @Schema(description = "Статус заказа", example = "SUCCESS", allowableValues = {"WAITING_FOR_PAYMENT", "SUCCESS", "FAILED", "REFUNDED"})
+    @Schema(description = "Статус заказа", example = "SUCCESS", allowableValues = {"WAITING_FOR_PAYMENT", "SUCCESS", "FAILED", "REFUNDED", "DELIVERING", "DELIVERED"})
     private final Status orderStatus;
 
     @Schema(description = "Дата и время создания заказа", example = "2025-01-12 13:56", type = "string", pattern = "yyyy-MM-dd HH:mm")

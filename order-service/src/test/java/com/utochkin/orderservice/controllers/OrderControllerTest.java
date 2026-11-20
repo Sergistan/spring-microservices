@@ -3,7 +3,9 @@ package com.utochkin.orderservice.controllers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.utochkin.orderservice.config.Config;
 import com.utochkin.orderservice.dto.AddressDto;
+import com.utochkin.orderservice.dto.DeliveryStatusResponse;
 import com.utochkin.orderservice.dto.OrderDto;
+import com.utochkin.orderservice.exceptions.DeliveryConflictException;
 import com.utochkin.orderservice.exceptions.OrderNotFoundException;
 import com.utochkin.orderservice.models.Status;
 import com.utochkin.orderservice.models.User;
@@ -31,8 +33,12 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.never;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import java.math.BigDecimal;
@@ -209,6 +215,81 @@ public class OrderControllerTest {
                         .content(mapper.writeValueAsString(req))
                 )
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("POST /order/api/v1/orders/{uuid}/deliveries — 200, сервисный токен delivery-service-client")
+    void startDelivery_ServiceClient_Returns200() throws Exception {
+        given(orderService.markOrderDelivering(orderUuid))
+                .willReturn(new DeliveryStatusResponse(orderUuid, Status.DELIVERING));
+
+        mvc.perform(post("/order/api/v1/orders/{uuid}/deliveries", orderUuid)
+                        .with(jwt().jwt(j -> j.claim("azp", "delivery-service-client")))
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orderUuid").value(orderUuid.toString()))
+                .andExpect(jsonPath("$.orderStatus").value("DELIVERING"));
+    }
+
+    @Test
+    @DisplayName("POST /order/api/v1/orders/{uuid}/deliveries — 403, обычный пользователь (azp не delivery)")
+    void startDelivery_UserToken_Forbidden() throws Exception {
+        mvc.perform(post("/order/api/v1/orders/{uuid}/deliveries", orderUuid)
+                        .with(jwt().jwt(j -> j.claim("azp", "spring-microservices")))
+                )
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.messageError").value("Ошибка: доступ разрешён только внутренним сервисам"));
+
+        then(orderService).should(never()).markOrderDelivering(any());
+    }
+
+    @Test
+    @DisplayName("PATCH /order/api/v1/orders/{uuid}/deliveries — 409, возврат успел раньше доставки")
+    void completeDelivery_Conflict() throws Exception {
+        willThrow(new DeliveryConflictException(Status.REFUNDED))
+                .given(orderService).markOrderDelivered(orderUuid);
+
+        mvc.perform(patch("/order/api/v1/orders/{uuid}/deliveries", orderUuid)
+                        .with(jwt().jwt(j -> j.claim("azp", "delivery-service-client")))
+                )
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.messageError").value("Заказ находится в статусе REFUNDED — операция доставки невозможна"));
+    }
+
+    @Test
+    @DisplayName("PATCH /order/api/v1/orders/{uuid}/deliveries — 200, доставка завершена")
+    void completeDelivery_Success() throws Exception {
+        given(orderService.markOrderDelivered(orderUuid))
+                .willReturn(new DeliveryStatusResponse(orderUuid, Status.DELIVERED));
+
+        mvc.perform(patch("/order/api/v1/orders/{uuid}/deliveries", orderUuid)
+                        .with(jwt().jwt(j -> j.claim("azp", "delivery-service-client")))
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orderStatus").value("DELIVERED"));
+    }
+
+    @Test
+    @DisplayName("GET /order/api/v1/users/{subId}/has-active-orders — 200 true, сервисный токен auth-service-client")
+    void hasActiveOrders_ServiceClient_Returns200() throws Exception {
+        given(orderService.hasActiveOrders("sub-42")).willReturn(true);
+
+        mvc.perform(get("/order/api/v1/users/{subId}/has-active-orders", "sub-42")
+                        .with(jwt().jwt(j -> j.claim("azp", "auth-service-client")))
+                )
+                .andExpect(status().isOk())
+                .andExpect(content().string("true"));
+    }
+
+    @Test
+    @DisplayName("GET /order/api/v1/users/{subId}/has-active-orders — 403, чужой клиент (azp)")
+    void hasActiveOrders_WrongClient_Forbidden() throws Exception {
+        mvc.perform(get("/order/api/v1/users/{subId}/has-active-orders", "sub-42")
+                        .with(jwt().jwt(j -> j.claim("azp", "spring-microservices")))
+                )
+                .andExpect(status().isForbidden());
+
+        then(orderService).should(never()).hasActiveOrders(any());
     }
 
 }
