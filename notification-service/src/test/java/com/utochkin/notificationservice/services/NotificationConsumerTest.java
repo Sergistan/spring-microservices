@@ -20,6 +20,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -138,6 +139,40 @@ public class NotificationConsumerTest {
         verifyNoInteractions(processedEventsStore);
         then(ack).should().acknowledge();
         then(emailService).should().sendOrderNotification(eq("john@doe.com"), any(), any());
+    }
+
+    @Test
+    @DisplayName("DELIVERING — письмо «курьер принял заказ, будет доставлен в течение дня» отправляется")
+    void onOrderEvent_delivering_sendsEmail() {
+        var base = baseOrder();
+        var order = new OrderDtoForKafka(
+                base.getOrderUuid(), base.getTotalAmount(), Status.DELIVERING,
+                base.getCreatedAt(), base.getUpdatedAt(), base.getAddressDto(),
+                base.getUserDto(), base.getOrderRequests(), base.getPaymentId(), base.getEventId());
+        given(processedEventsStore.tryAcquire(order.getEventId())).willReturn(true);
+
+        consumer.onOrderEvent(order, ack);
+
+        then(emailService).should().sendOrderNotification(
+                eq("john@doe.com"), eq("Номер заказа " + order.getOrderUuid()),
+                argThat(text -> text.contains("принят курьером") && text.contains("в течение дня")));
+        then(ack).should().acknowledge();
+    }
+
+    @Test
+    @DisplayName("DELIVERED — письмо не отправляется (уведомили при DELIVERING), offset ack")
+    void onOrderEvent_delivered_noEmail() {
+        var base = baseOrder();
+        var order = new OrderDtoForKafka(
+                base.getOrderUuid(), base.getTotalAmount(), Status.DELIVERED,
+                base.getCreatedAt(), base.getUpdatedAt(), base.getAddressDto(),
+                base.getUserDto(), base.getOrderRequests(), base.getPaymentId(), base.getEventId());
+        given(processedEventsStore.tryAcquire(order.getEventId())).willReturn(true);
+
+        consumer.onOrderEvent(order, ack);
+
+        then(emailService).should(never()).sendOrderNotification(any(), any(), any());
+        then(ack).should().acknowledge();
     }
 
 }

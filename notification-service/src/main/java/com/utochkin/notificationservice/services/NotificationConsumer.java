@@ -53,8 +53,16 @@ public class NotificationConsumer {
         }
     }
 
-    /** Отправка письма на email из события (нет email -> warn и пропуск, это не ошибка). */
+    /**
+     * Отправка письма на email из события (нет email -> warn и пропуск, это не ошибка).
+     * DELIVERED -> письмо не шлём: уведомили уже при DELIVERING («будет доставлен в течение дня»).
+     */
     private void sendNotification(OrderDtoForKafka orderDto) {
+        if (orderDto.getOrderStatus() == com.utochkin.notificationservice.dto.Status.DELIVERED) {
+            log.info("NotificationConsumer: заказ {} доставлен — письмо не отправляем (уведомление ушло при DELIVERING)",
+                    orderDto.getOrderUuid());
+            return;
+        }
         String recipientEmail = orderDto.getUserDto().email();
         if (recipientEmail != null && !recipientEmail.isEmpty()) {
             String subject = "Номер заказа " + orderDto.getOrderUuid();
@@ -65,7 +73,7 @@ public class NotificationConsumer {
         }
     }
 
-        /** Текст письма по статусу: SUCCESS — детали/адрес/позиции, FAILED и REFUNDED — короткие шаблоны. */
+        /** Текст письма по статусу: SUCCESS — детали/адрес/позиции, FAILED/REFUNDED/DELIVERING — шаблоны (DELIVERED сюда не попадает — письмо не шлём). */
     private String createEmailText(OrderDtoForKafka orderDto) {
             log.debug("NotificationConsumer: формируем текст письма для заказа {}", orderDto.getOrderUuid());
 
@@ -127,6 +135,24 @@ public class NotificationConsumer {
                             .append(" Ваши средства в размере ")
                             .append(orderDto.getTotalAmount())
                             .append(" в ближайшее время вернутся на счет.")
+                            .append("\n");
+                }
+                case DELIVERING -> {
+                    sb.append("Здравствуйте, ")
+                            .append(orderDto.getUserDto().firstName())
+                            .append("!\n\n");
+                    sb.append("Ваш заказ №")
+                            .append(orderDto.getOrderUuid())
+                            .append(" принят курьером и доставляется по адресу: ")
+                            .append(orderDto.getAddressDto().city())
+                            .append(", ")
+                            .append(orderDto.getAddressDto().street())
+                            .append(", дом № ")
+                            .append(orderDto.getAddressDto().houseNumber())
+                            .append(", квартира № ")
+                            .append(orderDto.getAddressDto().apartmentNumber())
+                            .append(".\n\n");
+                    sb.append("Заказ будет доставлен в течение дня.")
                             .append("\n");
                 }
             }
