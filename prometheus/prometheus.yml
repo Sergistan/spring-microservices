@@ -12,3 +12,5 @@ scrape_configs:
           - history-service:8184
           - getaway-server:8072
           - notification-service:8183
+          - auth-service:8185
+          - delivery-service:8186
