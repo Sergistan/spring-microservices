@@ -150,13 +150,6 @@ flowchart TB
 
 Все классы, методы и репозитории покрыты javadoc на русском языке (назначение, гарантии целостности, потоки данных), пакеты `web`/`feign`/`dto` имеют `package-info.java` с описанием, какие данные и куда текут.
 
-### Известные ограничения (осознанные решения)
-
-- **Email не верифицируется** при саморегистрации (emailVerified=true сразу) — можно указать чужой адрес, письма о заказах уйдут не тому. Полноценное подтверждение — отдельный флоу Keycloak (verify-email + required action), вне скоупа учебного проекта;
-- **Access-токен удалённого аккаунта жив до exp** (минуты): в этом окне ещё можно создать заказ; refresh-токен уже не сработает — пользователь удалён. Лечится только отзывом сессий через Admin API — не реализовано;
-- **Новые consumer-группы на непустом топике**: delivery-group создана с `auto-offset-reset=earliest` — при первом старте обработала бы всю историю SUCCESS. В новых средах ставьте `latest` или чистите топик перед стартом;
-- **Курьеры могут создавать и оплачивать заказы** (роли на /orders не ограничены) — осознанное решение: курьер одновременно покупатель.
-
 ## Настройка стартовых пользователей в Keycloak:
 В системе зарегистрированы 2 стартовых пользователя:  
 
@@ -174,19 +167,21 @@ flowchart TB
 - роль USER или COURIER назначается автоматически при саморегистрации `POST /auth/api/v1/users`.
 
 ### Общая настройка Keycloak:
-![Схема2](images/keycloak/realm.png)
+![Схема2](images/keycloak/realms.png)
 
-![Схема4](images/keycloak/user.png)
+![Схема3](images/keycloak/users.png)
 Настройка spring-microservices аналогична настройкам в auth-service-client и delivery-service-client
-![Схема5](images/keycloak/spring-microservices_openId.png)
+![Схема4](images/keycloak/spring-microservices_openId.png)
 
-![Схема6](images/keycloak/order-service-client.png)
+![Схема5](images/keycloak/order-service-client.png)
 
-## Order-service API, Shop-service API и Auth-service API в Swagger:
+## Auth-service, Order-service API и Shop-service API в Swagger:
 
 Эндпоинты для создания, оплаты, возврата заказов, добавления, изменения, удаления и получения товара/товаров,
 саморегистрации пользователя/курьера и удаления аккаунта,
 а также кнопка аутентификации посредством OAuth 2.0 с помощью Keycloak представлены в Swagger.
+
+![Схема6](images/swagger/auth-service.png)
 
 ![Схема7](images/swagger/order-service.png)
 
@@ -799,7 +794,7 @@ sequenceDiagram
 
 ELK - система для сбора, хранения и мониторинга логов в системе.
 
-![Схема11](images/мониторинг/elk.jpg)
+![Схема11](images/мониторинг/elk.png)
 
 Prometheus и Grafana - для сбора и визуализации метрик.
 
